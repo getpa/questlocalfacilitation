@@ -1,0 +1,13 @@
+name: quest-mirror
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - jq
+  - sed
+  - coreutils
+  - curl
+  - unzip
+  - pip
+  - pip:
+      - requests

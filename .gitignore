@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.apdisk
+
+# Python / Conda
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+.envrc
+.python-version
+.mamba-env/
+
+# Mamba/Conda artifacts
+env*/
+*.conda
+*.lock
+conda-meta/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Generated media & captures
+recordings/
+screenshots/
+*.mp4
+*.mkv
+*.mov
+*.png
+
+# Logs
+*.log

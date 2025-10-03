@@ -18,6 +18,17 @@ start options:
   --status-interval SEC  監視更新間隔（秒）
   --status-skip-connect  監視時に adb connect を行わない（デフォルト）
   --status-connect       監視時にも毎回 adb connect を実施
+  --quest-tweaks         Quest OS 向けワークアラウンドを適用（デフォルト: 有効）
+  --no-quest-tweaks      Quest OS ワークアラウンドを無効化
+  --quest-no-guardian    Quest ワークアラウンド時に guardian 操作を行わない
+  --quest-no-prox        Quest ワークアラウンド時に prox_close を送らない
+  --quest-capture-width PX    Quest capture width を setprop で指定
+  --quest-capture-height PX   Quest capture height を setprop で指定
+  --quest-capture-bitrate BPS Quest capture bitrate を setprop で指定
+  --quest-awake-timeout SEC   ディスプレイ点灯待ちのタイムアウト秒数
+  --quest-awake-poll SEC      点灯チェックのポーリング間隔（少数可）
+  --quest-skip-awake-check    ディスプレイ点灯確認を省略
+  --quest-no-restore          終了時に setprop / prox_open を戻さない
 
 status options:
   --interval SEC         更新間隔（秒）
@@ -38,6 +49,18 @@ Environment overrides (必要に応じて export してください):
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
   SCRCPY_LAUNCH_DELAY = scrcpy 起動間隔 (秒、デフォルト: 0.4)
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
+  QUEST_TWEAKS_ENABLED  = Quest ワークアラウンド適用可否 (デフォルト: true)
+  QUEST_TWEAK_GUARDIAN  = guardian_pause setprop 実行可否 (デフォルト: true)
+  QUEST_TWEAK_PROX      = prox_close/prox_open ブロードキャスト可否 (デフォルト: true)
+  QUEST_CAPTURE_WIDTH   = debug.oculus.capture.width のデフォルト値
+  QUEST_CAPTURE_HEIGHT  = debug.oculus.capture.height のデフォルト値
+  QUEST_CAPTURE_BITRATE = debug.oculus.capture.bitrate のデフォルト値
+  QUEST_CAPTURE_FULL_RATE = debug.oculus.fullRateCapture のデフォルト値
+  QUEST_CAPTURE_EYE    = debug.oculus.screenCaptureEye のデフォルト値
+  QUEST_REQUIRE_AWAKE   = scrcpy 起動前に Display ON を待つか (デフォルト: true)
+  QUEST_AWAKE_TIMEOUT   = Display ON 待機タイムアウト秒 (デフォルト: 10)
+  QUEST_AWAKE_POLL      = Display ON ポーリング間隔 (デフォルト: 0.5)
+  QUEST_RESTORE_ON_EXIT = 終了時に setprop と prox_open を戻すか (デフォルト: true)
 USAGE
 }
 
@@ -61,6 +84,14 @@ ensure_positive_integer() {
   fi
 }
 
+ensure_positive_number() {
+  local value="$1"
+  if ! printf '%s\n' "${value}" | awk '/^[0-9]*\.?[0-9]+$/ { if ($0+0>0) ok=1 } END { exit ok?0:1 }'; then
+    log_error "Invalid value: ${value}"
+    exit 1
+  fi
+}
+
 ACTION=${1:-}
 if [[ -n ${ACTION} ]]; then
   shift || true
@@ -76,7 +107,18 @@ STATUS_SKIP_CONNECT=false
 RECORD_MODE="off"
 DRY_RUN=false
 BASE_PORT=${SCRCPY_BASE_PORT:-27183}
-RENDER_DRIVER=${SCRCPY_RENDER_DRIVER:-metal}
+QUEST_TWEAKS_ENABLED=${QUEST_TWEAKS_ENABLED:-true}
+QUEST_TWEAK_GUARDIAN=${QUEST_TWEAK_GUARDIAN:-true}
+QUEST_TWEAK_PROX=${QUEST_TWEAK_PROX:-true}
+QUEST_CAPTURE_WIDTH=${QUEST_CAPTURE_WIDTH:-}
+QUEST_CAPTURE_HEIGHT=${QUEST_CAPTURE_HEIGHT:-}
+QUEST_CAPTURE_BITRATE=${QUEST_CAPTURE_BITRATE:-}
+QUEST_CAPTURE_FULL_RATE=${QUEST_CAPTURE_FULL_RATE:-}
+QUEST_CAPTURE_EYE=${QUEST_CAPTURE_EYE:-}
+QUEST_REQUIRE_AWAKE=${QUEST_REQUIRE_AWAKE:-true}
+QUEST_AWAKE_TIMEOUT=${QUEST_AWAKE_TIMEOUT:-10}
+QUEST_AWAKE_POLL=${QUEST_AWAKE_POLL:-0.5}
+QUEST_RESTORE_ON_EXIT=${QUEST_RESTORE_ON_EXIT:-true}
 
 if [[ -n ${SCRCPY_EXTRA_ARGS:-} ]]; then
   read -r -a SCRCPY_EXTRA_ARRAY <<<"${SCRCPY_EXTRA_ARGS}"
@@ -123,6 +165,128 @@ restart_scrcpy() {
   fi
 }
 
+apply_quest_tweaks() {
+  local alias="$1" endpoint="$2"
+  [[ ${QUEST_TWEAKS_ENABLED} == true ]] || return 0
+  if [[ ${QUEST_TWEAK_GUARDIAN} == true ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 0 >/dev/null 2>&1 || true
+  fi
+  if [[ ${QUEST_TWEAK_PROX} == true ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "${QUEST_CAPTURE_WIDTH}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_HEIGHT} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "${QUEST_CAPTURE_HEIGHT}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_BITRATE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "${QUEST_CAPTURE_BITRATE}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_FULL_RATE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "${QUEST_CAPTURE_FULL_RATE}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_EYE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "${QUEST_CAPTURE_EYE}" >/dev/null 2>&1 || true
+  fi
+  "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_HOME >/dev/null 2>&1 || true
+  log_info "${alias}: applied Quest keep-awake tweaks"
+}
+
+restore_quest_tweaks() {
+  local alias="$1" endpoint="$2"
+  [[ ${QUEST_TWEAKS_ENABLED} == true && ${QUEST_RESTORE_ON_EXIT} == true ]] || return 0
+  if [[ ${QUEST_TWEAK_GUARDIAN} == true ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 1 >/dev/null 2>&1 || true
+  fi
+  if [[ ${QUEST_TWEAK_PROX} == true ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_HEIGHT} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_BITRATE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_FULL_RATE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "" >/dev/null 2>&1 || true
+  fi
+  if [[ -n ${QUEST_CAPTURE_EYE} ]]; then
+    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "" >/dev/null 2>&1 || true
+  fi
+  log_info "${alias}: restored Quest OS tweaks"
+}
+
+get_display_state() {
+  local endpoint="$1" state_line="" state=""
+
+  state_line=$("${ADB_BIN}" -s "${endpoint}" shell dumpsys power 2>/dev/null | awk '/Display Power:/ {print; exit}') || state_line=""
+  if [[ ${state_line} =~ state=([A-Za-z_]+) ]]; then
+    state=${BASH_REMATCH[1]}
+  elif [[ ${state_line} =~ STATE_([A-Za-z_]+) ]]; then
+    state=${BASH_REMATCH[1]}
+  elif [[ ${state_line} =~ STATE=([A-Za-z_]+) ]]; then
+    state=${BASH_REMATCH[1]}
+  fi
+
+  if [[ -z ${state} ]]; then
+    state_line=$("${ADB_BIN}" -s "${endpoint}" shell dumpsys display 2>/dev/null | awk '/mPowerState=/ {print; exit}') || state_line=""
+    if [[ ${state_line} =~ mPowerState=([A-Za-z_]+) ]]; then
+      state=${BASH_REMATCH[1]}
+    fi
+  fi
+
+  if [[ -z ${state} ]]; then
+    state_line=$("${ADB_BIN}" -s "${endpoint}" shell dumpsys window policy 2>/dev/null | awk '/mScreenOnFully/ {print; exit}') || state_line=""
+    if [[ ${state_line} =~ mScreenOnFully=([A-Za-z_]+) ]]; then
+      if [[ ${BASH_REMATCH[1]} == "true" ]]; then
+        state="ON"
+      fi
+    elif [[ ${state_line} =~ mScreenOnFully[[:space:]]+([A-Za-z_]+) ]]; then
+      if [[ ${BASH_REMATCH[1]} == "true" ]]; then
+        state="ON"
+      fi
+    fi
+  fi
+
+  if [[ -z ${state} ]]; then
+    state="UNKNOWN"
+  fi
+
+  state=$(printf '%s' "${state}" | tr '[:lower:]' '[:upper:]')
+  printf '%s' "${state}"
+}
+
+wait_for_display_awake() {
+  local alias="$1" endpoint="$2"
+  [[ ${QUEST_REQUIRE_AWAKE} == true ]] || return 0
+  local start now state
+  start=$(date +%s)
+  while true; do
+    state=$(get_display_state "${endpoint}")
+    if [[ ${state} == "UNKNOWN" ]]; then
+      log_info "${alias}: display state could not be determined (continuing)"
+      return 0
+    fi
+    if [[ ${state} == "ON" || ${state} == "ONLINE" || ${state} == "STATE_ON" || ${state} == "DISPLAY_STATE_ON" ]]; then
+      return 0
+    fi
+    if [[ ${state} == *"ON"* && ${state} != "UNKNOWN" ]]; then
+      return 0
+    fi
+    now=$(date +%s)
+    if (( now - start >= QUEST_AWAKE_TIMEOUT )); then
+      log_warn "${alias}: display did not report ON within ${QUEST_AWAKE_TIMEOUT}s (state=${state:-unknown})"
+      return 1
+    fi
+    sleep "${QUEST_AWAKE_POLL}"
+  done
+}
+
 case "${ACTION:-}" in
   start)
     STATUS_SKIP_CONNECT=true
@@ -144,6 +308,62 @@ case "${ACTION:-}" in
           ;;
         --status-skip-connect) STATUS_SKIP_CONNECT=true ;;
         --status-connect) STATUS_SKIP_CONNECT=false ;;
+        --quest-tweaks) QUEST_TWEAKS_ENABLED=true ;;
+        --no-quest-tweaks) QUEST_TWEAKS_ENABLED=false ;;
+        --quest-no-guardian) QUEST_TWEAK_GUARDIAN=false ;;
+        --quest-no-prox) QUEST_TWEAK_PROX=false ;;
+        --quest-capture-width)
+          shift || { log_error "Missing value for --quest-capture-width"; exit 1; }
+          ensure_positive_integer "$1"
+          QUEST_CAPTURE_WIDTH="$1"
+          ;;
+        --quest-capture-width=*)
+          value=${1#*=}
+          ensure_positive_integer "${value}"
+          QUEST_CAPTURE_WIDTH="${value}"
+          ;;
+        --quest-capture-height)
+          shift || { log_error "Missing value for --quest-capture-height"; exit 1; }
+          ensure_positive_integer "$1"
+          QUEST_CAPTURE_HEIGHT="$1"
+          ;;
+        --quest-capture-height=*)
+          value=${1#*=}
+          ensure_positive_integer "${value}"
+          QUEST_CAPTURE_HEIGHT="${value}"
+          ;;
+        --quest-capture-bitrate)
+          shift || { log_error "Missing value for --quest-capture-bitrate"; exit 1; }
+          ensure_positive_integer "$1"
+          QUEST_CAPTURE_BITRATE="$1"
+          ;;
+        --quest-capture-bitrate=*)
+          value=${1#*=}
+          ensure_positive_integer "${value}"
+          QUEST_CAPTURE_BITRATE="${value}"
+          ;;
+        --quest-skip-awake-check) QUEST_REQUIRE_AWAKE=false ;;
+        --quest-awake-timeout)
+          shift || { log_error "Missing value for --quest-awake-timeout"; exit 1; }
+          ensure_positive_integer "$1"
+          QUEST_AWAKE_TIMEOUT="$1"
+          ;;
+        --quest-awake-timeout=*)
+          value=${1#*=}
+          ensure_positive_integer "${value}"
+          QUEST_AWAKE_TIMEOUT="${value}"
+          ;;
+        --quest-awake-poll)
+          shift || { log_error "Missing value for --quest-awake-poll"; exit 1; }
+          ensure_positive_number "$1"
+          QUEST_AWAKE_POLL="$1"
+          ;;
+        --quest-awake-poll=*)
+          value=${1#*=}
+          ensure_positive_number "${value}"
+          QUEST_AWAKE_POLL="${value}"
+          ;;
+        --quest-no-restore) QUEST_RESTORE_ON_EXIT=false ;;
         --record=*)
           RECORD_MODE="on"
           ;;
@@ -303,7 +523,6 @@ start_device() {
     "--video-bit-rate=${BIT_RATE}"
     "--max-size=${MAX_SIZE}"
     "--stay-awake"
-    "--render-driver=${RENDER_DRIVER}"
     "--port=${port}"
   )
   if (( ${#SCRCPY_EXTRA_ARRAY[@]} )); then
@@ -323,13 +542,15 @@ start_device() {
 
   if ! wait_for_device "${endpoint}"; then
     log_warn "${alias}: device offline, skipping scrcpy launch"
-    return 1
+    return 0
   fi
+
+  apply_quest_tweaks "${alias}" "${endpoint}"
+  wait_for_display_awake "${alias}" "${endpoint}" || true
 
   restart_scrcpy "${endpoint}"
   (
     local attempt=0
-    export SDL_RENDER_DRIVER="${RENDER_DRIVER}"
     while true; do
       attempt=$((attempt + 1))
       "${cmd[@]}" 2>&1 | while IFS= read -r line; do
@@ -450,15 +671,24 @@ cleanup() {
       restart_scrcpy "${endpoint}"
     done
   fi
-  for pid in "${SCRCPY_PIDS[@]}"; do
-    kill "${pid}" >/dev/null 2>&1 || true
-  done
+  if [[ -n ${SCRCPY_PIDS+x} ]]; then
+    for pid in "${SCRCPY_PIDS[@]}"; do
+      kill "${pid}" >/dev/null 2>&1 || true
+    done
+  fi
   if [[ -n ${STATUS_PID:-} ]]; then
     kill "${STATUS_PID}" >/dev/null 2>&1 || true
   fi
-  for pid in "${SCRCPY_PIDS[@]}"; do
-    wait "${pid}" >/dev/null 2>&1 || true
-  done
+  if [[ ${QUEST_TWEAKS_ENABLED} == true && ${QUEST_RESTORE_ON_EXIT} == true ]]; then
+    for idx in "${!ENDPOINTS[@]}"; do
+      restore_quest_tweaks "${ALIASES[$idx]}" "${ENDPOINTS[$idx]}"
+    done
+  fi
+  if [[ -n ${SCRCPY_PIDS+x} ]]; then
+    for pid in "${SCRCPY_PIDS[@]}"; do
+      wait "${pid}" >/dev/null 2>&1 || true
+    done
+  fi
   if [[ -n ${STATUS_PID:-} ]]; then
     wait "${STATUS_PID}" >/dev/null 2>&1 || true
   fi

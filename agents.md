@@ -46,6 +46,16 @@
 5. **ディレクトリ準備**  
    本レポジトリ直下に `scripts/` と録画保存用 `recordings/` を作成しておく。
 
+### 1.3 Quest OS の近接センサー対策
+Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください。
+
+```bash
+./scripts/quest_os_tweaks.sh engage --capture-width 1920 --capture-height 1920 --capture-full-rate 1 --capture-eye 2
+./scripts/quest_os_tweaks.sh restore
+```
+
+`quest_multi_scrcpy.sh start` はデフォルトで同じ対策（Guardian pause、prox_close、KEYCODE_WAKEUP）を各端末に適用してから scrcpy を起動します。個別に Guardian を残したい、prox ブロードキャストを抑止したい場合は後述の `--no-quest-tweaks` / `--quest-no-guardian` / `--quest-no-prox` を付けてください。
+
 ---
 
 ## 2. 端末リスト（最大30台）の管理方法
@@ -573,7 +583,8 @@ fi
 - **レイアウト制御**：`GRID_COLUMNS` / `GRID_ROWS` と `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` を上書きすればマルチモニターやプロジェクタにも対応。
 - **dry-run チェック**：`--dry-run` で配置・起動コマンドのみ確認できるため、30台分の新構成を事前検証可能。
 - **バッテリー監視**：`start` 実行中は 60秒ごと（`STATUS_INTERVAL` または `--status-interval` で変更可）にバッテリー/給電状態を自動出力。端末が offline なら再接続を待ってから scrcpy を再起動（連続2回検知で実施）するため、ポート競合を避けつつ復帰できます。不要な場合は `--no-status`。監視時の `adb connect` 有無は `--status-skip-connect` / `--status-connect` で調整。
-- **ポート管理**：`SCRCPY_BASE_PORT` を起点に空きポートを自動スキャンして割り当てるため、並列起動時の `bind: Address already in use` を回避できます。ログ出力は `[launcher]` プレフィックス付きで表示されるため、scrcpy 本体のログと判別しやすくなります。scrcpy 側の出力も `[Quest-XX]` のように別名でタグ付けされるので、どのヘッドセットがメッセージを出したか即座に把握できます。追加で scrcpy フラグを渡す場合は `SCRCPY_EXTRA_ARGS="--no-audio"` のように環境変数で指定できます。起動間隔を調整したい場合は `SCRCPY_LAUNCH_DELAY` (秒) を指定すると各 scrcpy の立ち上げが順次ディレイされます。デフォルトでは `--no-audio --no-clipboard` を付与して安定性を高めており、描画ドライバは `SCRCPY_RENDER_DRIVER` (デフォルト `metal`) で切り替えられます。`SCRCPY_EXTRA_ARGS` でこれらを上書きしても構いません。`Ctrl+C` で終了すると全サブプロセスが確実に停止し、すべての scrcpy ウィンドウも閉じるようトラップ処理を追加済みです。
+- **ポート管理**：`SCRCPY_BASE_PORT` を起点に空きポートを自動スキャンして割り当てるため、並列起動時の `bind: Address already in use` を回避できます。ログ出力は `[launcher]` プレフィックス付きで表示されるため、scrcpy 本体のログと判別しやすくなります。scrcpy 側の出力も `[Quest-XX]` のように別名でタグ付けされるので、どのヘッドセットがメッセージを出したか即座に把握できます。追加で scrcpy フラグを渡す場合は `SCRCPY_EXTRA_ARGS="--no-audio"` のように環境変数で指定できます。起動間隔を調整したい場合は `SCRCPY_LAUNCH_DELAY` (秒) を指定すると各 scrcpy の立ち上げが順次ディレイされます。デフォルトでは `--no-audio --no-clipboard` を付与して安定性を高めており、描画ドライバを切り替えたい場合は `SCRCPY_EXTRA_ARGS="--render-driver=opengl"` のように渡してください。`Ctrl+C` で終了すると全サブプロセスが確実に停止し、すべての scrcpy ウィンドウも閉じるようトラップ処理を追加済みです。
+- **Quest OS ワークアラウンド**：`start` 実行時に Guardian pause・`prox_close` ブロードキャスト・`KEYCODE_WAKEUP`・任意の `debug.oculus.capture.*` setprop を自動適用します。`--no-quest-tweaks` で従来動作に戻せます。Guardian だけ戻したい場合は `--quest-no-guardian`、近接センサーだけスキップしたい場合は `--quest-no-prox` を指定。点灯状態のチェックは `--quest-awake-timeout` / `--quest-awake-poll` で調整可能、完全にスキップするなら `--quest-skip-awake-check`。キャプチャ系は `QUEST_CAPTURE_WIDTH/HEIGHT/BITRATE/FULL_RATE/EYE` で Meta 推奨値（例: 1920×1920・bitrate 30M・fullRate=1・screenCaptureEye=2）をまとめて指定可能。
 - **エラーハンドリング**：端末数が `MAX_DEVICES` を超えた場合は即座に終了。IP 設定ミスなども早期に検知します。
 
 ---
@@ -601,6 +612,11 @@ GRID_COLUMNS=6 GRID_ROWS=5 ./scripts/quest_multi_scrcpy.sh start --dry-run
 
 # 録画モード + カスタム保存先
 RECORD_DIR="$PWD/recordings/2024-lesson01" ./scripts/quest_multi_scrcpy.sh start --record
+
+# Quest OS ワークアラウンドのカスタマイズ
+./scripts/quest_multi_scrcpy.sh start --quest-no-guardian
+./scripts/quest_multi_scrcpy.sh start --quest-capture-width 1920 --quest-capture-height 1920 --quest-capture-full-rate 1 --quest-capture-eye 2
+./scripts/quest_multi_scrcpy.sh start --quest-skip-awake-check   # 旧挙動に合わせる
 ```
 
 - 録画モード時は **30台 × 高ビットレート** となるため、Mac のストレージ帯域と余裕を事前に確認してください。
@@ -719,7 +735,8 @@ DEVICES=(
 - **scrcpy ウィンドウが溢れる**：`GRID_COLUMNS`/`GRID_ROWS` を増やす、または複数モニターに分けて複数回起動。
 - **録画ファイルが欠損**：ストレージ空き容量と書き込み速度を確認。`--record` は高負荷のため、必要端末のみに限定するか、USB-C 外付けSSDを活用。
 - **入力が効かない UI**：VR 特有のジェスチャーは `adb shell input` で完全再現できない場合あり。Quest 側ガーディアン設定などは手動で対応。
-- **ウィンドウ表示が真っ黒**：Quest 側の画面ON/OFFを確認。`--turn-screen-off=false` を付けていてもディスプレイがスリープに入る場合は給電環境を見直す。
+- **scrcpy が黒画面で中央にポインタだけ表示される**：近接センサーが開いたままの可能性大。`./scripts/quest_os_tweaks.sh engage` もしくは `quest_multi_scrcpy.sh start` の Quest ワークアラウンド（デフォルト有効）で `prox_close` を送ってから再起動。`--quest-awake-timeout` を延ばすと装着してからの起動待ちに余裕を持たせられます。
+- **Meta メニューをレーザーポインタでなぞると映像が激しく点滅**：Horizon OS v76+ の既知問題。`--crop`/`--client-crop`/`--angle` などの描画フィルターは外し、メニュー操作後に flicker が始まったら該当ウィンドウのみ停止→再実行でリフレッシュ。録画継続が必要な場合は OBS 側でトリミングするなど後段で処理してください。
 
 ---
 

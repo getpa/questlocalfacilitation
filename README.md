@@ -82,7 +82,29 @@ Activate the environment, then run:
 ./scripts/quest_multi_scrcpy.sh status --interval 15 # standalone monitor (clears screen)
 ```
 
-Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. If a headset becomes unreachable during a run, the watcher waits for it to come back online, retries `adb connect`, and relaunches scrcpy without spawning duplicate instances. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; ports are auto-scanned for availability starting from that value. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. By default the launcher feeds `--no-audio --no-clipboard` to each scrcpy instance; override with `SCRCPY_EXTRA_ARGS` if you want different flags. Set `SCRCPY_RENDER_DRIVER` (default `metal`) if you need to switch renderers—for example, `SCRCPY_RENDER_DRIVER=opengl`. Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Offline devices are retried automatically after two consecutive failed status checks to avoid thrashing scrcpy restarts. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
+Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. If a headset becomes unreachable during a run, the watcher waits for it to come back online, retries `adb connect`, and relaunches scrcpy without spawning duplicate instances. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; ports are auto-scanned for availability starting from that value. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. By default the launcher feeds `--no-audio --no-clipboard` to each scrcpy instance; override with `SCRCPY_EXTRA_ARGS` if you want additional scrcpy flags (for example, `--display-id=0` or `--render-driver=opengl`). Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Offline devices are retried automatically after two consecutive failed status checks to avoid thrashing scrcpy restarts. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
+
+Recent Quest OS builds gate video capture behind the headset proximity sensor and sometimes glitch when Meta UI overlays are hovered. The launcher now applies Meta-specific workarounds by default before each scrcpy instance starts: it pauses Guardian, fakes the proximity sensor (`prox_close` broadcast), replays `KEYCODE_WAKEUP`, and can set `debug.oculus.capture.*` properties if you provide values. Disable or customise this behaviour with:
+
+```bash
+./scripts/quest_multi_scrcpy.sh start --no-quest-tweaks          # skip all setprop/broadcast tweaks
+./scripts/quest_multi_scrcpy.sh start --quest-no-guardian        # keep Guardian active
+./scripts/quest_multi_scrcpy.sh start --quest-capture-width 1920 # set capture props when needed
+QUEST_CAPTURE_BITRATE=30000000 \
+QUEST_CAPTURE_FULL_RATE=1 QUEST_CAPTURE_EYE=2 \
+./scripts/quest_multi_scrcpy.sh start --record
+```
+
+Tune the wake guard if you prefer to start scrcpy only after the wearer has the headset on:
+
+```bash
+./scripts/quest_multi_scrcpy.sh start --quest-awake-timeout 20 --quest-awake-poll 1
+./scripts/quest_multi_scrcpy.sh start --quest-skip-awake-check   # fire immediately (legacy behaviour)
+```
+
+Use `scripts/quest_os_tweaks.sh engage` / `restore` outside the launcher when you need to toggle these flags manually (for example, before a supervised session or after a crash that left Guardian paused).
+
+Flicker that appears when the controller laser hovers Meta UI elements is a known Horizon OS regression (v76+). The safest mitigations today are to keep cropping/angle flags disabled, wait until the headset is awake before mirroring, and restart the affected scrcpy window (Ctrl+C → relaunch or rerun the launcher for the specific alias) when the UI feed corrupts.
 
 ## Updating Dependencies
 To refresh conda packages (CLI tooling) and re-fetch binaries:

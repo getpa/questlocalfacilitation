@@ -76,6 +76,35 @@ log_error() {
   printf '[launcher][ERROR] %s\n' "$*" >&2
 }
 
+format_command() {
+  local formatted="" arg
+  for arg in "$@"; do
+    formatted+=" $(printf '%q' "$arg")"
+  done
+  printf '%s' "${formatted# }"
+}
+
+dry_run_command() {
+  [[ ${DRY_RUN:-false} == true ]] || return 0
+  printf '[dry-run] %s\n' "$(format_command "$@")"
+}
+
+run_cmd() {
+  dry_run_command "$@"
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    return 0
+  fi
+  "$@"
+}
+
+run_cmd_quiet() {
+  dry_run_command "$@"
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    return 0
+  fi
+  "$@" >/dev/null 2>&1
+}
+
 ensure_positive_integer() {
   local value="$1"
   if [[ ! ${value} =~ ^[0-9]+$ ]] || (( value <= 0 )); then
@@ -128,6 +157,10 @@ fi
 
 is_port_in_use() {
   local port="$1"
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    dry_run_command lsof -PiTCP:"${port}" -sTCP:LISTEN -n
+    return 1
+  fi
   lsof -PiTCP:"${port}" -sTCP:LISTEN -n >/dev/null 2>&1
 }
 
@@ -146,6 +179,12 @@ find_free_port() {
 
 wait_for_device() {
   local endpoint="$1" attempts=0 state
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    dry_run_command "${ADB_BIN}" connect "${endpoint}"
+    dry_run_command "${ADB_BIN}" -s "${endpoint}" get-state
+    dry_run_command sleep 0.5
+    return 0
+  fi
   while (( attempts < 12 )); do
     "${ADB_BIN}" connect "${endpoint}" >/dev/null 2>&1 || true
     state=$("${ADB_BIN}" -s "${endpoint}" get-state 2>/dev/null | tr -d '\r') || state=""
@@ -161,7 +200,7 @@ wait_for_device() {
 restart_scrcpy() {
   local endpoint="$1"
   if command -v pkill >/dev/null 2>&1; then
-    pkill -f "scrcpy --serial=${endpoint}" >/dev/null 2>&1 || true
+    run_cmd_quiet pkill -f "scrcpy --serial=${endpoint}" || true
   fi
 }
 
@@ -169,28 +208,28 @@ apply_quest_tweaks() {
   local alias="$1" endpoint="$2"
   [[ ${QUEST_TWEAKS_ENABLED} == true ]] || return 0
   if [[ ${QUEST_TWEAK_GUARDIAN} == true ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 0 >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 0 || true
   fi
   if [[ ${QUEST_TWEAK_PROX} == true ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_close || true
   fi
   if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "${QUEST_CAPTURE_WIDTH}" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "${QUEST_CAPTURE_WIDTH}" || true
   fi
   if [[ -n ${QUEST_CAPTURE_HEIGHT} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "${QUEST_CAPTURE_HEIGHT}" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "${QUEST_CAPTURE_HEIGHT}" || true
   fi
   if [[ -n ${QUEST_CAPTURE_BITRATE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "${QUEST_CAPTURE_BITRATE}" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "${QUEST_CAPTURE_BITRATE}" || true
   fi
   if [[ -n ${QUEST_CAPTURE_FULL_RATE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "${QUEST_CAPTURE_FULL_RATE}" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "${QUEST_CAPTURE_FULL_RATE}" || true
   fi
   if [[ -n ${QUEST_CAPTURE_EYE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "${QUEST_CAPTURE_EYE}" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "${QUEST_CAPTURE_EYE}" || true
   fi
-  "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
-  "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_HOME >/dev/null 2>&1 || true
+  run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_WAKEUP || true
+  run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_HOME || true
   log_info "${alias}: applied Quest keep-awake tweaks"
 }
 
@@ -198,31 +237,38 @@ restore_quest_tweaks() {
   local alias="$1" endpoint="$2"
   [[ ${QUEST_TWEAKS_ENABLED} == true && ${QUEST_RESTORE_ON_EXIT} == true ]] || return 0
   if [[ ${QUEST_TWEAK_GUARDIAN} == true ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 1 >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 1 || true
   fi
   if [[ ${QUEST_TWEAK_PROX} == true ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open || true
   fi
   if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" || true
   fi
   if [[ -n ${QUEST_CAPTURE_HEIGHT} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "" || true
   fi
   if [[ -n ${QUEST_CAPTURE_BITRATE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "" || true
   fi
   if [[ -n ${QUEST_CAPTURE_FULL_RATE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "" || true
   fi
   if [[ -n ${QUEST_CAPTURE_EYE} ]]; then
-    "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "" >/dev/null 2>&1 || true
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "" || true
   fi
   log_info "${alias}: restored Quest OS tweaks"
 }
 
 get_display_state() {
   local endpoint="$1" state_line="" state=""
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    dry_run_command "${ADB_BIN}" -s "${endpoint}" shell dumpsys power
+    dry_run_command "${ADB_BIN}" -s "${endpoint}" shell dumpsys display
+    dry_run_command "${ADB_BIN}" -s "${endpoint}" shell dumpsys window policy
+    printf 'ON'
+    return 0
+  fi
 
   state_line=$("${ADB_BIN}" -s "${endpoint}" shell dumpsys power 2>/dev/null | awk '/Display Power:/ {print; exit}') || state_line=""
   if [[ ${state_line} =~ state=([A-Za-z_]+) ]]; then
@@ -480,7 +526,7 @@ if [[ ${ACTION} == "start" ]]; then
   }
 
   if [[ ${RECORD_MODE} == "on" ]]; then
-    mkdir -p "${RECORD_DIR}"
+    run_cmd mkdir -p "${RECORD_DIR}"
   fi
 fi
 
@@ -532,13 +578,11 @@ start_device() {
     cmd+=("${record_flag[@]}")
   fi
 
-  if ${DRY_RUN}; then
-    log_info "[dry-run] scrcpy command for ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
-    printf '    %q\n' "${cmd[@]}"
-    return 0
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    log_info "[dry-run] preparing launch for ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
+  else
+    log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
   fi
-
-  log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
 
   if ! wait_for_device "${endpoint}"; then
     log_warn "${alias}: device offline, skipping scrcpy launch"
@@ -549,6 +593,12 @@ start_device() {
   wait_for_display_awake "${alias}" "${endpoint}" || true
 
   restart_scrcpy "${endpoint}"
+
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    dry_run_command "${cmd[@]}"
+    dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
+    return 0
+  fi
   (
     local attempt=0
     while true; do

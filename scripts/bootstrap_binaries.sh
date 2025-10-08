@@ -12,6 +12,7 @@ SCRCPY_GIT_REF=${SCRCPY_GIT_REF:-"client-crop-option"}
 SCRCPY_INSTALL_DIR_NAME=${SCRCPY_INSTALL_DIR_NAME:-"scrcpy-client-crop"}
 ANDROID_SDK_URL=${ANDROID_SDK_URL:-"https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"}
 ANDROID_SDK_PACKAGES=${ANDROID_SDK_PACKAGES:-"platforms;android-35 build-tools;35.0.0 platform-tools"}
+SDKMANAGER_AUTO_ACCEPT=${SDKMANAGER_AUTO_ACCEPT:-1}
 
 log() {
   local level="$1"
@@ -89,6 +90,36 @@ is_truthy() {
     1|true|yes|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+SDKMANAGER_AUTO_NOTICE=0
+SDKMANAGER_INTERACTIVE_NOTICE=0
+
+sdkmanager_run() {
+  local auto="${SDKMANAGER_AUTO_ACCEPT}"
+  if is_truthy "${auto}"; then
+    if (( SDKMANAGER_AUTO_NOTICE == 0 )); then
+      log INFO "Automatically accepting Android SDK prompts (set SDKMANAGER_AUTO_ACCEPT=0 to review manually)"
+      SDKMANAGER_AUTO_NOTICE=1
+    fi
+    (
+      set +o pipefail
+      if command -v yes >/dev/null 2>&1; then
+        yes | "$@"
+      else
+        while true; do
+          printf 'y\n'
+          sleep 0.1
+        done | "$@"
+      fi
+    )
+  else
+    if (( SDKMANAGER_INTERACTIVE_NOTICE == 0 )); then
+      log INFO "Running sdkmanager interactively; follow the prompts to continue."
+      SDKMANAGER_INTERACTIVE_NOTICE=1
+    fi
+    "$@"
+  fi
 }
 
 install_scrcpy_from_release() {
@@ -186,12 +217,12 @@ ensure_android_sdk() {
 
   if (( ${#missing_packages[@]} > 0 )); then
     log INFO "Installing Android SDK components: ${missing_packages[*]}"
-    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}"
+    sdkmanager_run "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}"
   else
     log INFO "Required Android SDK components already installed"
   fi
 
-  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses
+  sdkmanager_run "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses
 
   ANDROID_SDK_ROOT_OVERRIDE="${sdk_dir}"
   SDK_ENV=(env ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT_OVERRIDE}" ANDROID_HOME="${ANDROID_SDK_ROOT_OVERRIDE}")

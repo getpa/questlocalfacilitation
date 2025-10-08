@@ -31,7 +31,10 @@ fi
 resolve_binary() {
   local name="$1"
   shift || true
-  local -a extra_candidates=("$@")
+  local -a extra_candidates=()
+  if (($#)); then
+    extra_candidates=("$@")
+  fi
   local candidate
   local -a candidates=()
 
@@ -42,7 +45,9 @@ resolve_binary() {
     )
   fi
 
-  candidates+=("${extra_candidates[@]}")
+  if ((${#extra_candidates[@]})); then
+    candidates+=("${extra_candidates[@]}")
+  fi
 
   for candidate in "${candidates[@]}"; do
     if [[ -n ${candidate} && -x ${candidate} ]]; then
@@ -71,4 +76,3 @@ require_binary() {
   fi
   printf -v "${__var}" '%s' "${path}"
 }
-

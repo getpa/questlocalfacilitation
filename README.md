@@ -7,6 +7,22 @@ Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrc
 - [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge) or another conda-compatible installation that bundles `mamba`
 - USB access to each Quest for the initial developer-mode pairing
 
+## Host Build Dependencies
+The bootstrap script compiles `scrcpy` from the `client-crop-option` fork by default. Install the following host tools once per Mac before running any bootstrap commands:
+
+```bash
+brew install git curl unzip meson ninja pkg-config sdl2 ffmpeg libusb openjdk@17
+```
+
+Then expose the JDK for Gradle during builds:
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+> Tip: If you prefer to use the official scrcpy release binaries instead, set `SCRCPY_BUILD_FROM_GIT=0` when invoking `bootstrap_binaries.sh`.
+
 ## Set Up the Environment
 Create the project-local environment and install the required binaries into it:
 

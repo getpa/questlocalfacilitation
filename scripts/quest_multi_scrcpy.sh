@@ -479,6 +479,7 @@ COLS=()
 ROWS=()
 UNREACHABLE_COUNTS=()
 SCRCPY_PIDS=()
+LAUNCH_ATTEMPTS=()
 STATUS_PID=""
 
 for entry in "${RAW_DEVICES[@]}"; do
@@ -492,6 +493,7 @@ for entry in "${RAW_DEVICES[@]}"; do
   COLS+=("${col:-}")
   ROWS+=("${row:-}")
   UNREACHABLE_COUNTS+=(0)
+  LAUNCH_ATTEMPTS+=(0)
 
 done
 
@@ -532,6 +534,9 @@ fi
 
 start_device() {
   local alias="$1" endpoint="$2" col="$3" row="$4" index="$5"
+  local launch_count=${LAUNCH_ATTEMPTS[$index]}
+  launch_count=$((launch_count + 1))
+  LAUNCH_ATTEMPTS[$index]=$launch_count
 
   local x y
   if [[ -n ${col} && -n ${row} ]]; then
@@ -545,12 +550,14 @@ start_device() {
   fi
 
   local title="scrcpy - ${alias} (${endpoint})"
-  local record_flag=()
+  local sanitized_alias="" record_base=""
   if [[ ${RECORD_MODE} == "on" ]]; then
-    local sanitized_alias
     sanitized_alias=$(echo "${alias}" | tr -cs '[:alnum:]_-' '_')
-    local record_path="${RECORD_DIR}/${sanitized_alias}_${TIMESTAMP}.mp4"
-    record_flag=("--record=${record_path}")
+    local attempt_suffix=""
+    if (( launch_count > 1 )); then
+      attempt_suffix=$(printf '_attempt%02d' "${launch_count}")
+    fi
+    record_base="${RECORD_DIR}/${sanitized_alias}_${TIMESTAMP}${attempt_suffix}"
   fi
 
   local requested_port=$(( BASE_PORT + index ))
@@ -560,7 +567,7 @@ start_device() {
     return 1
   fi
 
-  local cmd=(
+  local -a cmd_base=(
     "${SCRCPY_BIN}"
     "--serial=${endpoint}"
     "--window-title=${title}"
@@ -572,10 +579,7 @@ start_device() {
     "--port=${port}"
   )
   if (( ${#SCRCPY_EXTRA_ARRAY[@]} )); then
-    cmd+=("${SCRCPY_EXTRA_ARRAY[@]}")
-  fi
-  if [[ ${#record_flag[@]} -gt 0 ]]; then
-    cmd+=("${record_flag[@]}")
+    cmd_base+=("${SCRCPY_EXTRA_ARRAY[@]}")
   fi
 
   if [[ ${DRY_RUN:-false} == true ]]; then
@@ -595,14 +599,27 @@ start_device() {
   restart_scrcpy "${endpoint}"
 
   if [[ ${DRY_RUN:-false} == true ]]; then
-    dry_run_command "${cmd[@]}"
+    local -a preview_record=()
+    if [[ ${RECORD_MODE} == "on" ]]; then
+      preview_record=("--record=${record_base}.mp4")
+    fi
+    dry_run_command "${cmd_base[@]}" "${preview_record[@]}"
     dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
     return 0
   fi
   (
-    local attempt=0
+    local retry_counter=0
     while true; do
-      attempt=$((attempt + 1))
+      retry_counter=$((retry_counter + 1))
+      local record_path="" retry_suffix=""
+      local -a cmd=("${cmd_base[@]}")
+      if [[ ${RECORD_MODE} == "on" ]]; then
+        if (( retry_counter > 1 )); then
+          retry_suffix=$(printf '_retry%02d' "${retry_counter}")
+        fi
+        record_path="${record_base}${retry_suffix}.mp4"
+        cmd+=("--record=${record_path}")
+      fi
       "${cmd[@]}" 2>&1 | while IFS= read -r line; do
         printf '[%s] %s\n' "${alias}" "${line}"
       done
@@ -611,7 +628,7 @@ start_device() {
         log_info "scrcpy exited normally for ${alias}"
         break
       fi
-      log_warn "${alias}: scrcpy exited with code ${status} (attempt ${attempt}), retrying in 3s"
+      log_warn "${alias}: scrcpy exited with code ${status} (attempt ${retry_counter}), retrying in 3s"
       sleep 3
     done
   ) &

@@ -84,6 +84,16 @@ Activate the environment, then run:
 
 Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. If a headset becomes unreachable during a run, the watcher waits for it to come back online, retries `adb connect`, and relaunches scrcpy without spawning duplicate instances. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; ports are auto-scanned for availability starting from that value. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. By default the launcher feeds `--no-audio --no-clipboard` to each scrcpy instance; override with `SCRCPY_EXTRA_ARGS` if you want additional scrcpy flags (for example, `--display-id=0` or `--render-driver=opengl`). Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Offline devices are retried automatically after two consecutive failed status checks to avoid thrashing scrcpy restarts. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
 
+### Recording filename pattern
+Each headset produces unique filenames even if it disconnects and reconnects during a session. Examples:
+
+```text
+recordings/Quest-01_20240601-120000.mp4                # initial launch
+recordings/Quest-01_20240601-120000_retry02.mp4        # internal retry during the same launch
+recordings/Quest-01_20240601-120000_attempt02.mp4      # reconnect-triggered relaunch
+recordings/Quest-01_20240601-120000_attempt02_retry03.mp4
+```
+
 Recent Quest OS builds gate video capture behind the headset proximity sensor and sometimes glitch when Meta UI overlays are hovered. The launcher now applies Meta-specific workarounds by default before each scrcpy instance starts: it pauses Guardian, fakes the proximity sensor (`prox_close` broadcast), replays `KEYCODE_WAKEUP`, and can set `debug.oculus.capture.*` properties if you provide values. Disable or customise this behaviour with:
 
 ```bash

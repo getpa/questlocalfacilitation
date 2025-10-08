@@ -8,6 +8,14 @@ dependencies:
   - coreutils
   - curl
   - unzip
+  - git
+  - meson
+  - ninja
+  - pkg-config
+  - sdl2
+  - ffmpeg
+  - libusb
+  - openjdk=17
   - pip
   - pip:
       - requests

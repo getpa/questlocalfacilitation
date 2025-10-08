@@ -7,21 +7,11 @@ Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrc
 - [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge) or another conda-compatible installation that bundles `mamba`
 - USB access to each Quest for the initial developer-mode pairing
 
-## Host Build Dependencies
-The bootstrap script compiles `scrcpy` from the `client-crop-option` fork by default. Install the following host tools once per Mac before running any bootstrap commands:
+## Host Requirements
+- Xcode Command Line Tools (install with `xcode-select --install` if they are not already present).
+- All other build-time dependencies (Meson, Ninja, pkg-config, SDL2, FFmpeg, libusb, OpenJDK 17, git, etc.) are provided inside the project conda environment and do not need separate Homebrew installs.
 
-```bash
-brew install git curl unzip meson ninja pkg-config sdl2 ffmpeg libusb openjdk@17
-```
-
-Then expose the JDK for Gradle during builds:
-
-```bash
-export JAVA_HOME="$(/usr/libexec/java_home -v 17)"
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-> Tip: If you prefer to use the official scrcpy release binaries instead, set `SCRCPY_BUILD_FROM_GIT=0` when invoking `bootstrap_binaries.sh`.
+> Tip: To fall back to the official scrcpy release binaries instead of building the fork, set `SCRCPY_BUILD_FROM_GIT=0` when invoking `bootstrap_binaries.sh`.
 
 ## Set Up the Environment
 Create the project-local environment and install the required binaries into it:
@@ -29,6 +19,12 @@ Create the project-local environment and install the required binaries into it:
 ```bash
 mamba env create -p ./.mamba-env -f environment.yml
 ./scripts/bootstrap_binaries.sh ./.mamba-env
+```
+
+If the environment already exists, refresh it instead of recreating:
+
+```bash
+mamba env update -p ./.mamba-env -f environment.yml
 ```
 
 Activate it when working in the repo:
@@ -47,8 +43,8 @@ Verify the binaries inside the environment:
 ```bash
 which adb
 which scrcpy
-scrcpy --version
 adb version
+scrcpy --version
 ```
 
 ## Configure Devices

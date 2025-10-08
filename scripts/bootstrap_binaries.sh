@@ -10,6 +10,8 @@ SCRCPY_BUILD_FROM_GIT=${SCRCPY_BUILD_FROM_GIT:-1}
 SCRCPY_GIT_REPO=${SCRCPY_GIT_REPO:-"https://github.com/kevinagnes/scrcpy.git"}
 SCRCPY_GIT_REF=${SCRCPY_GIT_REF:-"client-crop-option"}
 SCRCPY_INSTALL_DIR_NAME=${SCRCPY_INSTALL_DIR_NAME:-"scrcpy-client-crop"}
+ANDROID_SDK_URL=${ANDROID_SDK_URL:-"https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"}
+ANDROID_SDK_PACKAGES=${ANDROID_SDK_PACKAGES:-"platforms;android-35 build-tools;35.0.0 platform-tools"}
 
 log() {
   local level="$1"
@@ -38,6 +40,14 @@ if [[ ! -d "${prefix}" ]]; then
 fi
 
 command -v git >/dev/null 2>&1 || { echo "[!] git is required." >&2; exit 1; }
+command -v java >/dev/null 2>&1 || { echo "[!] java not found. Install a JDK (e.g. openjdk@17) and ensure it is on PATH." >&2; exit 1; }
+
+if [[ -z ${JAVA_HOME:-} ]]; then
+  JAVA_HOME=$(cd "$(dirname "$(command -v java)")/.." && pwd)
+  export JAVA_HOME
+  export PATH="${JAVA_HOME}/bin:${PATH}"
+  log INFO "JAVA_HOME not set, defaulting to ${JAVA_HOME}"
+fi
 
 bin_dir="${prefix}/bin"
 vendor_dir="${prefix}/vendor"
@@ -98,9 +108,90 @@ install_scrcpy_from_release() {
   SCRCPY_FINAL_DIR="${scrcpy_dir}"
 }
 
+ANDROID_SDK_ROOT_OVERRIDE=""
+SDK_ENV=()
+
+ensure_android_sdk() {
+  if [[ -n ${ANDROID_SDK_ROOT:-} ]]; then
+    log INFO "Using ANDROID_SDK_ROOT from environment: ${ANDROID_SDK_ROOT}"
+    local home_val="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+    SDK_ENV=(env ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT}" ANDROID_HOME="${home_val}")
+    return
+  fi
+  if [[ -n ${ANDROID_HOME:-} ]]; then
+    log INFO "Using ANDROID_HOME from environment: ${ANDROID_HOME}"
+    SDK_ENV=(env ANDROID_HOME="${ANDROID_HOME}" ANDROID_SDK_ROOT="${ANDROID_HOME}")
+    return
+  fi
+
+  local sdk_dir="${vendor_dir}/android-sdk"
+  local cmdline_dir="${sdk_dir}/cmdline-tools/latest"
+  local sdkmanager=""
+
+  if [[ ! -x "${cmdline_dir}/bin/sdkmanager" ]]; then
+    log INFO "Downloading Android command-line tools"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    local zip_path="${tmp_dir}/cmdline-tools.zip"
+    download "${ANDROID_SDK_URL}" "${zip_path}"
+    mkdir -p "${sdk_dir}/cmdline-tools"
+    unzip -q "${zip_path}" -d "${tmp_dir}"
+    rm -rf "${cmdline_dir}"
+    mv "${tmp_dir}/cmdline-tools" "${cmdline_dir}"
+    rm -rf "${tmp_dir}"
+  fi
+
+  sdkmanager="${cmdline_dir}/bin/sdkmanager"
+  [[ -x "${sdkmanager}" ]] || { echo "[!] sdkmanager not found at ${sdkmanager}" >&2; exit 1; }
+
+  # Ensure requested packages are installed
+  IFS=' ' read -r -a packages <<<"${ANDROID_SDK_PACKAGES}"
+  local missing_packages=()
+  for pkg in "${packages[@]}"; do
+    case "${pkg}" in
+      platforms\;android-*)
+        local platform="${pkg#platforms;}"
+        [[ -d "${sdk_dir}/platforms/${platform}" ]] || missing_packages+=("${pkg}")
+        ;;
+      build-tools\;*)
+        local build="${pkg#build-tools;}"
+        [[ -d "${sdk_dir}/build-tools/${build}" ]] || missing_packages+=("${pkg}")
+        ;;
+      platform-tools)
+        [[ -d "${sdk_dir}/platform-tools" ]] || missing_packages+=("${pkg}")
+        ;;
+      *)
+        # Unknown package type, always attempt installation
+        missing_packages+=("${pkg}")
+        ;;
+    esac
+  done
+
+  if (( ${#missing_packages[@]} > 0 )); then
+    log INFO "Installing Android SDK components: ${missing_packages[*]}"
+    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}" >/dev/null
+  else
+    log INFO "Required Android SDK components already installed"
+  fi
+
+  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses >/dev/null
+
+  ANDROID_SDK_ROOT_OVERRIDE="${sdk_dir}"
+  SDK_ENV=(env ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT_OVERRIDE}" ANDROID_HOME="${ANDROID_SDK_ROOT_OVERRIDE}")
+}
+
+sdk_env_exec() {
+  if (( ${#SDK_ENV[@]} == 0 )); then
+    "$@"
+  else
+    "${SDK_ENV[@]}" "$@"
+  fi
+}
 install_scrcpy_from_git() {
   command -v meson >/dev/null 2>&1 || { echo "[!] meson is required to build scrcpy from source." >&2; exit 1; }
   command -v ninja >/dev/null 2>&1 || { echo "[!] ninja is required to build scrcpy from source." >&2; exit 1; }
+
+  ensure_android_sdk
 
   local src_dir="${vendor_dir}/scrcpy-src"
   local build_dir="${vendor_dir}/scrcpy-build"
@@ -132,13 +223,13 @@ install_scrcpy_from_git() {
     log INFO "Building scrcpy from source (commit ${commit})"
     rm -rf "${build_dir}" "${install_dir}"
     mkdir -p "${build_dir}"
-    (cd "${src_dir}" && meson setup "${build_dir}" \
+    (cd "${src_dir}" && sdk_env_exec meson setup "${build_dir}" \
       --prefix "${install_dir}" \
       --buildtype release \
       --strip \
       -Db_lto=true)
-    meson compile -C "${build_dir}"
-    meson install -C "${build_dir}"
+    sdk_env_exec meson compile -C "${build_dir}"
+    sdk_env_exec meson install -C "${build_dir}"
     echo "${commit}" > "${commit_file}"
   else
     log INFO "scrcpy already built at commit ${commit}, skipping rebuild"

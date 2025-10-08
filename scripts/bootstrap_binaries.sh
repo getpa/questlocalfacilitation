@@ -186,12 +186,12 @@ ensure_android_sdk() {
 
   if (( ${#missing_packages[@]} > 0 )); then
     log INFO "Installing Android SDK components: ${missing_packages[*]}"
-    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}" >/dev/null || true
+    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}"
   else
     log INFO "Required Android SDK components already installed"
   fi
 
-  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses >/dev/null || true
+  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses
 
   ANDROID_SDK_ROOT_OVERRIDE="${sdk_dir}"
   SDK_ENV=(env ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT_OVERRIDE}" ANDROID_HOME="${ANDROID_SDK_ROOT_OVERRIDE}")

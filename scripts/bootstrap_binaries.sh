@@ -39,6 +39,10 @@ if [[ ! -d "${prefix}" ]]; then
   exit 1
 fi
 
+# ensure the virtual environment bin directory is preferred
+export PATH="${prefix}/bin:${PATH}"
+export CONDA_PREFIX="${prefix}"
+
 command -v git >/dev/null 2>&1 || { echo "[!] git is required." >&2; exit 1; }
 command -v java >/dev/null 2>&1 || { echo "[!] java not found. Install a JDK (e.g. openjdk@17) and ensure it is on PATH." >&2; exit 1; }
 
@@ -88,20 +92,33 @@ is_truthy() {
 }
 
 install_scrcpy_from_release() {
-  local scrcpy_dir="${vendor_dir}/scrcpy-v${SCRCPY_VERSION}"
+  local release_arch="${SCRCPY_RELEASE_ARCH:-}"
+  if [[ -z "${release_arch}" ]]; then
+    case "$(uname -m)" in
+      arm64|aarch64) release_arch="macos-aarch64" ;;
+      x86_64|amd64) release_arch="macos-x86_64" ;;
+      *)
+        log WARN "Unknown architecture $(uname -m); defaulting to macos-aarch64"
+        release_arch="macos-aarch64"
+        ;;
+    esac
+  fi
+
+  local release_basename="scrcpy-${release_arch}-v${SCRCPY_VERSION}"
+  local scrcpy_dir="${vendor_dir}/${release_basename}"
   if [[ ! -x "${scrcpy_dir}/scrcpy" ]]; then
-    log INFO "Downloading scrcpy v${SCRCPY_VERSION} release tarball"
+    log INFO "Downloading scrcpy v${SCRCPY_VERSION} release tarball (${release_arch})"
     local tmp_dir
     tmp_dir=$(mktemp -d)
     local tar_path="${tmp_dir}/scrcpy.tar.gz"
-    local scrcpy_filename="scrcpy-macos-aarch64-v${SCRCPY_VERSION}.tar.gz"
+    local scrcpy_filename="${release_basename}.tar.gz"
     download "${SCRCPY_BASE_URL}/v${SCRCPY_VERSION}/${scrcpy_filename}" "${tar_path}"
     tar -xzf "${tar_path}" -C "${tmp_dir}"
     rm -rf "${scrcpy_dir}"
-    mv "${tmp_dir}/scrcpy-macos-aarch64-v${SCRCPY_VERSION}" "${scrcpy_dir}"
+    mv "${tmp_dir}/${release_basename}" "${scrcpy_dir}"
     rm -rf "${tmp_dir}"
   else
-    log INFO "scrcpy v${SCRCPY_VERSION} already present, skipping download"
+    log INFO "scrcpy v${SCRCPY_VERSION} (${release_arch}) already present, skipping download"
   fi
   ln -sf "${scrcpy_dir}/scrcpy" "${bin_dir}/scrcpy"
   ln -sf "${scrcpy_dir}/scrcpy-server" "${bin_dir}/scrcpy-server"
@@ -169,12 +186,12 @@ ensure_android_sdk() {
 
   if (( ${#missing_packages[@]} > 0 )); then
     log INFO "Installing Android SDK components: ${missing_packages[*]}"
-    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}" >/dev/null
+    yes | "${sdkmanager}" --sdk_root="${sdk_dir}" "${missing_packages[@]}" >/dev/null || true
   else
     log INFO "Required Android SDK components already installed"
   fi
 
-  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses >/dev/null
+  yes | "${sdkmanager}" --sdk_root="${sdk_dir}" --licenses >/dev/null || true
 
   ANDROID_SDK_ROOT_OVERRIDE="${sdk_dir}"
   SDK_ENV=(env ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT_OVERRIDE}" ANDROID_HOME="${ANDROID_SDK_ROOT_OVERRIDE}")

@@ -76,6 +76,23 @@ log_error() {
   printf '[launcher][ERROR] %s\n' "$*" >&2
 }
 
+resolve_binary() {
+  local name="$1"
+  shift
+  local candidate
+  for candidate in "$@"; do
+    if [[ -n ${candidate} && -x ${candidate} ]]; then
+      printf '%s' "${candidate}"
+      return 0
+    fi
+  done
+  if candidate=$(command -v "${name}" 2>/dev/null); then
+    printf '%s' "${candidate}"
+    return 0
+  fi
+  return 1
+}
+
 format_command() {
   local formatted="" arg
   for arg in "$@"; do
@@ -127,6 +144,7 @@ if [[ -n ${ACTION} ]]; then
 fi
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 CONFIG_DEFAULT="${SCRIPT_DIR}/quest_devices.tsv"
 CONFIG=${CONFIG:-"${CONFIG_DEFAULT}"}
 
@@ -454,11 +472,40 @@ esac
 
 ensure_positive_integer "${STATUS_INTERVAL}"
 
-ADB_BIN=${ADB_BIN:-$(command -v adb)}
+candidate_adb_paths=()
+if [[ -n ${CONDA_PREFIX:-} ]]; then
+  candidate_adb_paths+=("${CONDA_PREFIX}/bin/adb")
+fi
+candidate_adb_paths+=(
+  "${PROJECT_ROOT}/.mamba-env/bin/adb"
+  "${PROJECT_ROOT}/.mamba-env/vendor/platform-tools/adb"
+)
+if [[ -z ${ADB_BIN:-} ]]; then
+  if ! ADB_BIN=$(resolve_binary adb "${candidate_adb_paths[@]}"); then
+    ADB_BIN=""
+  fi
+fi
 [[ -n ${ADB_BIN:-} && -x ${ADB_BIN:-} ]] || { log_error "adb not found."; exit 1; }
 
 if [[ ${ACTION} == "start" ]]; then
-  SCRCPY_BIN=${SCRCPY_BIN:-$(command -v scrcpy)}
+  candidate_scrcpy_paths=()
+  if [[ -n ${CONDA_PREFIX:-} ]]; then
+    candidate_scrcpy_paths+=("${CONDA_PREFIX}/bin/scrcpy")
+  fi
+  candidate_scrcpy_paths+=(
+    "${PROJECT_ROOT}/.mamba-env/bin/scrcpy"
+    "${PROJECT_ROOT}/.mamba-env/vendor/scrcpy-client-crop/bin/scrcpy"
+  )
+  if [[ -d "${PROJECT_ROOT}/.mamba-env/vendor" ]]; then
+    while IFS= read -r path; do
+      candidate_scrcpy_paths+=("${path}")
+    done < <(find "${PROJECT_ROOT}/.mamba-env/vendor" -maxdepth 3 -type f -name scrcpy -print 2>/dev/null)
+  fi
+  if [[ -z ${SCRCPY_BIN:-} ]]; then
+    if ! SCRCPY_BIN=$(resolve_binary scrcpy "${candidate_scrcpy_paths[@]}"); then
+      SCRCPY_BIN=""
+    fi
+  fi
   [[ -n ${SCRCPY_BIN:-} && -x ${SCRCPY_BIN:-} ]] || { log_error "scrcpy not found."; exit 1; }
 fi
 

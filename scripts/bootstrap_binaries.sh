@@ -45,14 +45,30 @@ export PATH="${prefix}/bin:${PATH}"
 export CONDA_PREFIX="${prefix}"
 
 command -v git >/dev/null 2>&1 || { echo "[!] git is required." >&2; exit 1; }
-command -v java >/dev/null 2>&1 || { echo "[!] java not found. Install a JDK (e.g. openjdk@17) and ensure it is on PATH." >&2; exit 1; }
+
+JAVA_BIN=""
+if [[ -x "${prefix}/bin/java" ]]; then
+  JAVA_BIN="${prefix}/bin/java"
+elif [[ -x "${prefix}/lib/jvm/bin/java" ]]; then
+  JAVA_BIN="${prefix}/lib/jvm/bin/java"
+elif JAVA_BIN=$(command -v java 2>/dev/null); then
+  :
+fi
+
+[[ -n ${JAVA_BIN:-} ]] || { echo "[!] java not found. Install a JDK (e.g. openjdk@17) inside the environment." >&2; exit 1; }
 
 if [[ -z ${JAVA_HOME:-} ]]; then
-  JAVA_HOME=$(cd "$(dirname "$(command -v java)")/.." && pwd)
-  export JAVA_HOME
-  export PATH="${JAVA_HOME}/bin:${PATH}"
+  JAVA_HOME=$("${JAVA_BIN}" -XshowSettings:properties -version 2>&1 | awk -F' = ' '/\bjava.home\b/ {print $2; exit}')
+  JAVA_HOME=$(printf '%s' "${JAVA_HOME}" | sed 's/[[:space:]]*$//')
+  if [[ -z ${JAVA_HOME} ]]; then
+    JAVA_HOME=$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)
+  fi
   log INFO "JAVA_HOME not set, defaulting to ${JAVA_HOME}"
 fi
+
+export JAVA_HOME
+export PATH="${JAVA_HOME}/bin:${PATH}"
+log INFO "Using java binary: ${JAVA_BIN}"
 
 bin_dir="${prefix}/bin"
 vendor_dir="${prefix}/vendor"

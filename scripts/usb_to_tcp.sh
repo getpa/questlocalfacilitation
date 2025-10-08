@@ -2,6 +2,10 @@
 # usb_to_tcp.sh — Switch all USB-connected Quest headsets into adb TCP/IP mode.
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/_env_utils.sh"
+
 usage() {
   cat <<'USAGE'
 Usage: usb_to_tcp.sh [--port PORT]
@@ -43,7 +47,9 @@ if [[ ! ${PORT} =~ ^[0-9]+$ ]] || (( PORT < 1024 || PORT > 65535 )); then
   exit 1
 fi
 
-ADB_BIN=${ADB_BIN:-$(command -v adb)}
+if [[ -z ${ADB_BIN:-} ]]; then
+  require_binary adb ADB_BIN
+fi
 [[ -n ${ADB_BIN:-} && -x ${ADB_BIN:-} ]] || { echo "[!] adb not found." >&2; exit 1; }
 
 # Ensure the adb server is running.

@@ -38,6 +38,8 @@ The environment installs:
 - Python runtime and `requests`
 - Latest Android platform tools (`adb`, `fastboot`) and scrcpy binaries via `bootstrap_binaries.sh`
 
+All helper scripts in `scripts/` automatically prefer binaries inside this environment (falling back to `PATH` only if necessary), so you can run them without fully activating the env—though activation is still recommended for convenience.
+
 Verify the binaries inside the environment:
 
 ```bash

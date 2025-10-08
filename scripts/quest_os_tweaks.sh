@@ -2,6 +2,10 @@
 # quest_os_tweaks.sh — Apply Meta Quest OS tweaks (proximity + guardian + capture props) across configured devices
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/_env_utils.sh"
+
 usage() {
   cat <<'USAGE'
 Usage: quest_os_tweaks.sh <command> [options]
@@ -29,7 +33,6 @@ Environment overrides:
 USAGE
 }
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CONFIG=${CONFIG:-"${SCRIPT_DIR}/quest_devices.tsv"}
 ACTION=${1:-}
 [[ -n ${ACTION} ]] || { usage >&2; exit 1; }
@@ -117,7 +120,9 @@ case "${ACTION}" in
     ;;
 esac
 
-ADB_BIN=${ADB_BIN:-$(command -v adb)}
+if [[ -z ${ADB_BIN:-} ]]; then
+  require_binary adb ADB_BIN
+fi
 [[ -n ${ADB_BIN:-} && -x ${ADB_BIN:-} ]] || { echo "[tweak][ERROR] adb not found." >&2; exit 1; }
 
 mapfile -t DEVICES < <(grep -vE '^[[:space:]]*(#|$)' "${CONFIG}")

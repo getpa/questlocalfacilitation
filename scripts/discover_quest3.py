@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import os
 import socket
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from shutil import which
 from typing import Iterable, List, Optional
 
@@ -73,6 +75,28 @@ def parse_args() -> argparse.Namespace:
         help="Path to adb binary (defaults to resolving via $PATH).",
     )
     return parser.parse_args()
+
+
+def resolve_env_prefix() -> Path:
+    if "ENV_PREFIX" in os.environ:
+        return Path(os.environ["ENV_PREFIX"]).expanduser()
+    if "CONDA_PREFIX" in os.environ:
+        return Path(os.environ["CONDA_PREFIX"]).expanduser()
+    return Path(__file__).resolve().parent.parent / ".mamba-env"
+
+
+def resolve_adb(explicit: Optional[str]) -> Optional[str]:
+    if explicit:
+        return explicit
+    env_prefix = resolve_env_prefix()
+    candidates = [
+        env_prefix / "bin" / "adb",
+        env_prefix / "vendor" / "platform-tools" / "adb",
+    ]
+    for candidate in candidates:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return which("adb")
 
 
 def detect_cidr(interface: Optional[str] = None) -> tuple[ipaddress.IPv4Interface, ipaddress.IPv4Network]:
@@ -148,7 +172,7 @@ def enrich_with_adb(adb_path: str, host: str, port: int) -> tuple[Optional[str],
 def main() -> int:
     args = parse_args()
 
-    adc = args.adb_path or which("adb")
+    adc = resolve_adb(args.adb_path)
     if args.connect and not adc:
         print("[!] --connect specified but adb not found. Install or omit --connect.", file=sys.stderr)
         return 2

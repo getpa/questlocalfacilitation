@@ -2,6 +2,10 @@
 # keep_awake.sh — Toggle stay-awake/sleep settings on Quest devices listed in quest_devices.tsv
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PROJECT_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+source "${SCRIPT_DIR}/_env_utils.sh"
+
 usage() {
   cat <<'USAGE'
 Usage: keep_awake.sh [--config FILE] [--enable|--disable]
@@ -18,7 +22,6 @@ The script applies:
 USAGE
 }
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CONFIG="${SCRIPT_DIR}/quest_devices.tsv"
 MODE="enable"
 
@@ -51,7 +54,9 @@ if [[ ! -f ${CONFIG} ]]; then
   exit 1
 fi
 
-ADB_BIN=${ADB_BIN:-$(command -v adb)}
+if [[ -z ${ADB_BIN:-} ]]; then
+  require_binary adb ADB_BIN
+fi
 [[ -n ${ADB_BIN:-} && -x ${ADB_BIN:-} ]] || { echo "[!] adb not found." >&2; exit 1; }
 "${ADB_BIN}" start-server >/dev/null 2>&1
 

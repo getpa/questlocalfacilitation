@@ -208,32 +208,46 @@ restart_scrcpy() {
 }
 
 apply_quest_tweaks() {
-  local alias="$1" endpoint="$2"
+  local alias="$1" endpoint="$2" applied=false
   [[ ${QUEST_TWEAKS_ENABLED} == true ]] || return 0
   if [[ ${QUEST_TWEAK_GUARDIAN} == true ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.guardian_pause 0 || true
+    applied=true
   fi
   if [[ ${QUEST_TWEAK_PROX} == true ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_close || true
+    applied=true
   fi
   if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "${QUEST_CAPTURE_WIDTH}" || true
+    applied=true
   fi
   if [[ -n ${QUEST_CAPTURE_HEIGHT} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.height "${QUEST_CAPTURE_HEIGHT}" || true
+    applied=true
   fi
   if [[ -n ${QUEST_CAPTURE_BITRATE} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.bitrate "${QUEST_CAPTURE_BITRATE}" || true
+    applied=true
   fi
   if [[ -n ${QUEST_CAPTURE_FULL_RATE} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.fullRateCapture "${QUEST_CAPTURE_FULL_RATE}" || true
+    applied=true
   fi
   if [[ -n ${QUEST_CAPTURE_EYE} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.screenCaptureEye "${QUEST_CAPTURE_EYE}" || true
+    applied=true
   fi
+  if [[ ${applied} == true ]]; then
+    log_info "${alias}: applied Quest OS tweaks"
+  fi
+}
+
+wake_quest_display() {
+  local alias="$1" endpoint="$2"
   run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_WAKEUP || true
   run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_HOME || true
-  log_info "${alias}: applied Quest keep-awake tweaks"
+  log_info "${alias}: nudged display awake"
 }
 
 restore_quest_tweaks() {
@@ -606,21 +620,14 @@ start_device() {
 
   if [[ ${DRY_RUN:-false} == true ]]; then
     log_info "[dry-run] preparing launch for ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
-  else
-    log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
-  fi
-
-  if ! wait_for_device "${endpoint}"; then
-    log_warn "${alias}: device offline, skipping scrcpy launch"
-    return 0
-  fi
-
-  apply_quest_tweaks "${alias}" "${endpoint}"
-  wait_for_display_awake "${alias}" "${endpoint}" || true
-
-  restart_scrcpy "${endpoint}"
-
-  if [[ ${DRY_RUN:-false} == true ]]; then
+    if ! wait_for_device "${endpoint}"; then
+      log_warn "${alias}: device offline, skipping scrcpy launch"
+      return 0
+    fi
+    apply_quest_tweaks "${alias}" "${endpoint}"
+    wake_quest_display "${alias}" "${endpoint}"
+    wait_for_display_awake "${alias}" "${endpoint}" || true
+    restart_scrcpy "${endpoint}"
     local -a preview_record=()
     if [[ ${RECORD_MODE} == "on" ]]; then
       preview_record=("--record=${record_base}.mp4")
@@ -628,8 +635,22 @@ start_device() {
     dry_run_command "${cmd_base[@]}" "${preview_record[@]}"
     dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
     return 0
+  else
+    log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
   fi
+
   (
+    if ! wait_for_device "${endpoint}"; then
+      log_warn "${alias}: device offline, skipping scrcpy launch"
+      exit 0
+    fi
+
+    apply_quest_tweaks "${alias}" "${endpoint}"
+    wake_quest_display "${alias}" "${endpoint}"
+    wait_for_display_awake "${alias}" "${endpoint}" || true
+
+    restart_scrcpy "${endpoint}"
+
     local retry_counter=0
     while true; do
       retry_counter=$((retry_counter + 1))

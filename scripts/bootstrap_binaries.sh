@@ -3,13 +3,15 @@
 set -euo pipefail
 
 PLATFORM_TOOLS_URL=${PLATFORM_TOOLS_URL:-"https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"}
-SCRCPY_VERSION=${SCRCPY_VERSION:-"3.3.3"}
+SCRCPY_VERSION=${SCRCPY_VERSION:-"3.3.4"}
 SCRCPY_BASE_URL=${SCRCPY_BASE_URL:-"https://github.com/Genymobile/scrcpy/releases/download"}
-# Build from the client-crop branch by default; set SCRCPY_BUILD_FROM_GIT=0 to use the prebuilt release instead.
-SCRCPY_BUILD_FROM_GIT=${SCRCPY_BUILD_FROM_GIT:-1}
-SCRCPY_GIT_REPO=${SCRCPY_GIT_REPO:-"https://github.com/kevinagnes/scrcpy.git"}
-SCRCPY_GIT_REF=${SCRCPY_GIT_REF:-"client-crop-option"}
+# Use the official release by default; set SCRCPY_BUILD_FROM_GIT=1 to build the client-crop fork.
+SCRCPY_BUILD_FROM_GIT=${SCRCPY_BUILD_FROM_GIT:-0}
+SCRCPY_GIT_REPO=${SCRCPY_GIT_REPO:-"https://github.com/Genymobile/scrcpy.git"}
+SCRCPY_GIT_REF=${SCRCPY_GIT_REF:-"v3.3.4"}
 SCRCPY_INSTALL_DIR_NAME=${SCRCPY_INSTALL_DIR_NAME:-"scrcpy-client-crop"}
+SCRCPY_SERVER_URL=${SCRCPY_SERVER_URL:-"https://tmp.rom1v.com/scrcpy/5913/2/scrcpy-server"}
+SCRCPY_SERVER_SHA256=${SCRCPY_SERVER_SHA256:-"0ff7cb7d313b3803795e28a91a9c4ff0bf13bf5cc4153e10144f895cf0714c6"}
 ANDROID_SDK_URL=${ANDROID_SDK_URL:-"https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip"}
 ANDROID_SDK_PACKAGES=${ANDROID_SDK_PACKAGES:-"platforms;android-35 build-tools;35.0.0 platform-tools"}
 SDKMANAGER_AUTO_ACCEPT=${SDKMANAGER_AUTO_ACCEPT:-1}
@@ -29,7 +31,7 @@ fi
 
 if [[ -z "${prefix}" ]]; then
   echo "[!] Could not determine environment prefix. Activate the env or pass it as an argument." >&2
-  echo "    Usage: SCRCPY_VERSION=3.3.3 ./scripts/bootstrap_binaries.sh /path/to/env" >&2
+  echo "    Usage: SCRCPY_VERSION=3.3.4 ./scripts/bootstrap_binaries.sh /path/to/env" >&2
   exit 1
 fi
 
@@ -81,6 +83,63 @@ download() {
   local dest="$2"
   echo "[+] Downloading ${url}" >&2
   curl -L --progress-bar "$url" -o "$dest"
+}
+
+sha256_of_file() {
+  local path="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${path}" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+  else
+    log ERROR "No SHA-256 tool found (requires shasum or sha256sum)"
+    exit 1
+  fi
+}
+
+ensure_scrcpy_server_binary() {
+  local server_dir="${vendor_dir}/scrcpy-server"
+  local server_file="${server_dir}/scrcpy-server-custom"
+  mkdir -p "${server_dir}"
+
+  local needs_download=0
+  if [[ ! -f "${server_file}" ]]; then
+    needs_download=1
+  else
+    local existing_sha
+    existing_sha=$(sha256_of_file "${server_file}")
+    if [[ "${existing_sha}" != "${SCRCPY_SERVER_SHA256}" ]]; then
+      log WARN "Existing scrcpy-server checksum mismatch; re-downloading"
+      needs_download=1
+    fi
+  fi
+
+  if [[ "${needs_download}" -eq 1 ]]; then
+    download "${SCRCPY_SERVER_URL}" "${server_file}"
+  fi
+
+  local actual_sha
+  actual_sha=$(sha256_of_file "${server_file}")
+  if [[ "${actual_sha}" != "${SCRCPY_SERVER_SHA256}" ]]; then
+    log ERROR "scrcpy-server checksum mismatch"
+    log ERROR "  expected: ${SCRCPY_SERVER_SHA256}"
+    log ERROR "  actual:   ${actual_sha}"
+    log ERROR "  source:   ${SCRCPY_SERVER_URL}"
+    exit 1
+  fi
+
+  SCRCPY_SERVER_BINARY_PATH="${server_file}"
+}
+
+install_scrcpy_server_override() {
+  local target="$1"
+  [[ -n "${SCRCPY_SERVER_BINARY_PATH:-}" && -f "${SCRCPY_SERVER_BINARY_PATH}" ]] || {
+    log ERROR "scrcpy-server override source is not ready"
+    exit 1
+  }
+  mkdir -p "$(dirname "${target}")"
+  cp -f "${SCRCPY_SERVER_BINARY_PATH}" "${target}"
+  chmod 0644 "${target}"
 }
 
 # Install Android platform tools
@@ -167,6 +226,7 @@ install_scrcpy_from_release() {
   else
     log INFO "scrcpy v${SCRCPY_VERSION} (${release_arch}) already present, skipping download"
   fi
+  install_scrcpy_server_override "${scrcpy_dir}/scrcpy-server"
   ln -sf "${scrcpy_dir}/scrcpy" "${bin_dir}/scrcpy"
   ln -sf "${scrcpy_dir}/scrcpy-server" "${bin_dir}/scrcpy-server"
   SCRCPY_FINAL_DIR="${scrcpy_dir}"
@@ -300,11 +360,15 @@ install_scrcpy_from_git() {
   fi
 
   ln -sf "${install_dir}/bin/scrcpy" "${bin_dir}/scrcpy"
+  install_scrcpy_server_override "${install_dir}/share/scrcpy/scrcpy-server"
   ln -sf "${install_dir}/share/scrcpy/scrcpy-server" "${bin_dir}/scrcpy-server"
   SCRCPY_FINAL_DIR="${install_dir}"
 }
 
 SCRCPY_FINAL_DIR=""
+SCRCPY_SERVER_BINARY_PATH=""
+
+ensure_scrcpy_server_binary
 
 if is_truthy "${SCRCPY_BUILD_FROM_GIT}"; then
   install_scrcpy_from_git

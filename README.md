@@ -11,7 +11,7 @@ Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrc
 - Xcode Command Line Tools (install with `xcode-select --install` if they are not already present).
 - All other build-time dependencies (Meson, Ninja, pkg-config, SDL2, FFmpeg, libusb, OpenJDK 17, git, etc.) are provided inside the project conda environment and do not need separate Homebrew installs.
 
-> Tip: To fall back to the official scrcpy release binaries instead of building the fork, set `SCRCPY_BUILD_FROM_GIT=0` when invoking `bootstrap_binaries.sh`.
+> Tip: The bootstrap script now defaults to the official `scrcpy` release (`v3.3.4`). Set `SCRCPY_BUILD_FROM_GIT=1` when invoking `bootstrap_binaries.sh` if you need the `client-crop-option` fork instead.
 
 ## Set Up the Environment
 Create the project-local environment and install the required binaries into it:

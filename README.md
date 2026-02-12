@@ -33,6 +33,16 @@ Activate it when working in the repo:
 conda activate "${PWD}/.mamba-env"
 ```
 
+Before running any script in this repository, restart the adb daemon with the repo-local binary:
+
+```bash
+./scripts/restart_env_adb.sh
+```
+
+This script always executes:
+1. `./.mamba-env/bin/adb kill-server`
+2. `./.mamba-env/bin/adb start-server`
+
 The environment installs:
 - CLI helpers (`jq`, GNU `sed`, `coreutils`, `curl`, `unzip`)
 - Python runtime and `requests`
@@ -51,9 +61,11 @@ scrcpy --version
 
 ## Configure Devices
 1. Enable developer mode on each Quest 3 and authorize USB debugging.
-2. (Optional) With devices still tethered over USB, run `./scripts/usb_to_tcp.sh --port 5555` to switch every detected headset into Wi-Fi ADB mode.
-3. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 30 entries).
-4. Mirror the same endpoints in `scripts/devices.env` if you plan to use the broadcast-input helper scripts.
+2. Run `./scripts/restart_env_adb.sh` first.
+3. (Optional) With devices still tethered over USB, run `./scripts/usb_to_tcp.sh --port 5555` to switch every detected headset into Wi-Fi ADB mode.
+   - `usb_to_tcp.sh` also runs `./scripts/restart_env_adb.sh` automatically at startup to enforce the same adb-daemon reset sequence.
+4. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 30 entries).
+5. Mirror the same endpoints in `scripts/devices.env` if you plan to use the broadcast-input helper scripts.
 
 
 ## Discover Quest Endpoints Automatically

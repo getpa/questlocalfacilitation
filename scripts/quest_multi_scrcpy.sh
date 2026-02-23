@@ -17,6 +17,8 @@ Commands:
 start options:
   --record              各ウィンドウで scrcpy 録画を有効化 (デフォルト: 無効)
   --no-record           録画を明示的に無効化
+  --audio               各ウィンドウで scrcpy 音声転送を有効化（デフォルト）
+  --no-audio            各ウィンドウで scrcpy 音声転送を無効化
   --dry-run             実行内容を表示するだけ（接続/起動はしない）
   --no-status           バッテリー監視を無効化
   --status-interval SEC  監視更新間隔（秒）
@@ -155,8 +157,30 @@ QUEST_RESTORE_ON_EXIT=${QUEST_RESTORE_ON_EXIT:-true}
 if [[ -n ${SCRCPY_EXTRA_ARGS:-} ]]; then
   read -r -a SCRCPY_EXTRA_ARRAY <<<"${SCRCPY_EXTRA_ARGS}"
 else
-  SCRCPY_EXTRA_ARRAY=(--no-audio --no-clipboard )
+  SCRCPY_EXTRA_ARRAY=(--no-clipboard )
 fi
+SCRCPY_AUDIO_OVERRIDE=""
+
+has_scrcpy_arg() {
+  local needle="$1" arg
+  for arg in "${SCRCPY_EXTRA_ARRAY[@]}"; do
+    if [[ ${arg} == "${needle}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+remove_scrcpy_arg() {
+  local needle="$1" arg
+  local -a filtered=()
+  for arg in "${SCRCPY_EXTRA_ARRAY[@]}"; do
+    if [[ ${arg} != "${needle}" ]]; then
+      filtered+=("${arg}")
+    fi
+  done
+  SCRCPY_EXTRA_ARRAY=("${filtered[@]}")
+}
 
 is_port_in_use() {
   local port="$1"
@@ -343,6 +367,8 @@ case "${ACTION:-}" in
       case "$1" in
         --record) RECORD_MODE="on" ;;
         --no-record) RECORD_MODE="off" ;;
+        --audio) SCRCPY_AUDIO_OVERRIDE="on" ;;
+        --no-audio) SCRCPY_AUDIO_OVERRIDE="off" ;;
         --dry-run) DRY_RUN=true ;;
         --no-status) STATUS_ENABLED=false ;;
         --status-interval)
@@ -454,6 +480,16 @@ case "${ACTION:-}" in
     exit 1
     ;;
 esac
+
+if [[ ${ACTION} == "start" ]]; then
+  if [[ ${SCRCPY_AUDIO_OVERRIDE} == "on" ]]; then
+    remove_scrcpy_arg "--no-audio"
+  elif [[ ${SCRCPY_AUDIO_OVERRIDE} == "off" ]]; then
+    if ! has_scrcpy_arg "--no-audio"; then
+      SCRCPY_EXTRA_ARRAY+=("--no-audio")
+    fi
+  fi
+fi
 
 ensure_positive_integer "${STATUS_INTERVAL}"
 
@@ -621,11 +657,11 @@ start_device() {
   restart_scrcpy "${endpoint}"
 
   if [[ ${DRY_RUN:-false} == true ]]; then
-    local -a preview_record=()
+    local -a preview_cmd=("${cmd_base[@]}")
     if [[ ${RECORD_MODE} == "on" ]]; then
-      preview_record=("--record=${record_base}.mp4")
+      preview_cmd+=("--record=${record_base}.mp4")
     fi
-    dry_run_command "${cmd_base[@]}" "${preview_record[@]}"
+    dry_run_command "${preview_cmd[@]}"
     dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
     return 0
   fi

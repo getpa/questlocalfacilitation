@@ -26,7 +26,7 @@ start options:
   --status-interval SEC  監視更新間隔（秒）
   --status-skip-connect  監視時に adb connect を行わない（デフォルト）
   --status-connect       監視時にも毎回 adb connect を実施
-  --quest-tweaks         Quest OS 向けワークアラウンドを適用（デフォルト: 有効）
+  --quest-tweaks         Quest OS 向けワークアラウンドを適用（デフォルト: 無効）
   --no-quest-tweaks      Quest OS ワークアラウンドを無効化
   --quest-no-guardian    Quest ワークアラウンド時に guardian 操作を行わない
   --quest-no-prox        Quest ワークアラウンド時に prox_close を送らない
@@ -59,7 +59,7 @@ Environment overrides (必要に応じて export してください):
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
   SCRCPY_AUDIO_MODE  = 音声モード: dup | output | off (デフォルト: dup)
   SCRCPY_AUDIO_FALLBACK = dup 非対応時フォールバック: off | output (デフォルト: off)
-  QUEST_TWEAKS_ENABLED  = Quest ワークアラウンド適用可否 (デフォルト: true)
+  QUEST_TWEAKS_ENABLED  = Quest ワークアラウンド適用可否 (デフォルト: false)
   QUEST_TWEAK_GUARDIAN  = guardian_pause setprop 実行可否 (デフォルト: true)
   QUEST_TWEAK_PROX      = prox_close/prox_open ブロードキャスト可否 (デフォルト: true)
   QUEST_CAPTURE_WIDTH   = debug.oculus.capture.width のデフォルト値
@@ -145,7 +145,7 @@ STATUS_SKIP_CONNECT=false
 RECORD_MODE="off"
 DRY_RUN=false
 BASE_PORT=${SCRCPY_BASE_PORT:-27183}
-QUEST_TWEAKS_ENABLED=${QUEST_TWEAKS_ENABLED:-true}
+QUEST_TWEAKS_ENABLED=${QUEST_TWEAKS_ENABLED:-false}
 QUEST_TWEAK_GUARDIAN=${QUEST_TWEAK_GUARDIAN:-true}
 QUEST_TWEAK_PROX=${QUEST_TWEAK_PROX:-true}
 QUEST_CAPTURE_WIDTH=${QUEST_CAPTURE_WIDTH:-}

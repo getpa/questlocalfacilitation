@@ -11,7 +11,7 @@ Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrc
 - Xcode Command Line Tools (install with `xcode-select --install` if they are not already present).
 - All other build-time dependencies (Meson, Ninja, pkg-config, SDL2, FFmpeg, libusb, OpenJDK 17, git, etc.) are provided inside the project conda environment and do not need separate Homebrew installs.
 
-> Tip: To fall back to the official scrcpy release binaries instead of building the fork, set `SCRCPY_BUILD_FROM_GIT=0` when invoking `bootstrap_binaries.sh`.
+> Tip: The bootstrap script now defaults to the official `scrcpy` release (`v3.3.4`). Set `SCRCPY_BUILD_FROM_GIT=1` when invoking `bootstrap_binaries.sh` if you need the `client-crop-option` fork instead.
 
 ## Set Up the Environment
 Create the project-local environment and install the required binaries into it:
@@ -33,6 +33,16 @@ Activate it when working in the repo:
 conda activate "${PWD}/.mamba-env"
 ```
 
+Before running any script in this repository, restart the adb daemon with the repo-local binary:
+
+```bash
+./scripts/restart_env_adb.sh
+```
+
+This script always executes:
+1. `./.mamba-env/bin/adb kill-server`
+2. `./.mamba-env/bin/adb start-server`
+
 The environment installs:
 - CLI helpers (`jq`, GNU `sed`, `coreutils`, `curl`, `unzip`)
 - Python runtime and `requests`
@@ -51,9 +61,11 @@ scrcpy --version
 
 ## Configure Devices
 1. Enable developer mode on each Quest 3 and authorize USB debugging.
-2. (Optional) With devices still tethered over USB, run `./scripts/usb_to_tcp.sh --port 5555` to switch every detected headset into Wi-Fi ADB mode.
-3. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 30 entries).
-4. Mirror the same endpoints in `scripts/devices.env` if you plan to use the broadcast-input helper scripts.
+2. Run `./scripts/restart_env_adb.sh` first.
+3. (Optional) With devices still tethered over USB, run `./scripts/usb_to_tcp.sh --port 5555` to switch every detected headset into Wi-Fi ADB mode.
+   - `usb_to_tcp.sh` also runs `./scripts/restart_env_adb.sh` automatically at startup to enforce the same adb-daemon reset sequence.
+4. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 30 entries).
+5. Mirror the same endpoints in `scripts/devices.env` if you plan to use the broadcast-input helper scripts.
 
 
 ## Discover Quest Endpoints Automatically
@@ -90,13 +102,15 @@ Activate the environment, then run:
 
 ```bash
 ./scripts/quest_multi_scrcpy.sh start                 # mirror + periodic battery table
+./scripts/quest_multi_scrcpy.sh start --no-audio     # disable Quest audio forwarding
+./scripts/quest_multi_scrcpy.sh start --audio-mode output   # forward audio (Quest speaker may mute)
 ./scripts/quest_multi_scrcpy.sh start --record       # add recording per device
 ./scripts/quest_multi_scrcpy.sh start --no-status    # disable battery polling during mirror
 ./scripts/quest_multi_scrcpy.sh start --status-interval 120
 ./scripts/quest_multi_scrcpy.sh status --interval 15 # standalone monitor (clears screen)
 ```
 
-Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. If a headset becomes unreachable during a run, the watcher waits for it to come back online, retries `adb connect`, and relaunches scrcpy without spawning duplicate instances. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; ports are auto-scanned for availability starting from that value. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. By default the launcher feeds `--no-audio --no-clipboard` to each scrcpy instance; override with `SCRCPY_EXTRA_ARGS` if you want additional scrcpy flags (for example, `--display-id=0` or `--render-driver=opengl`). Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Offline devices are retried automatically after two consecutive failed status checks to avoid thrashing scrcpy restarts. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
+Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. If a headset becomes unreachable during a run, the watcher waits for it to come back online, retries `adb connect`, and relaunches scrcpy without spawning duplicate instances. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; ports are auto-scanned for availability starting from that value. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. Audio mode defaults to `dup` (copy audio to Mac while keeping Quest playback) and falls back to `off` by default when duplication is unsupported (`--audio-fallback output` to keep host audio in that case). Use `--audio-mode output` if you explicitly want legacy full-forwarding behavior, or `--no-audio` to silence host capture. Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Offline devices are retried automatically after two consecutive failed status checks to avoid thrashing scrcpy restarts. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
 
 ### Recording filename pattern
 Each headset produces unique filenames even if it disconnects and reconnects during a session. Examples:

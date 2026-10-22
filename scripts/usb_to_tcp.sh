@@ -52,9 +52,6 @@ if [[ -z ${ADB_BIN:-} ]]; then
 fi
 [[ -n ${ADB_BIN:-} && -x ${ADB_BIN:-} ]] || { echo "[!] adb not found." >&2; exit 1; }
 
-# Ensure the adb server is running.
-"${ADB_BIN}" start-server >/dev/null 2>&1
-
 detect_ip() {
   local serial="$1" attempts=0 ip_output ip
   while (( attempts < 6 )); do

@@ -17,12 +17,16 @@ Commands:
 start options:
   --record              各ウィンドウで scrcpy 録画を有効化 (デフォルト: 無効)
   --no-record           録画を明示的に無効化
+  --audio               各ウィンドウで scrcpy 音声転送を有効化（= --audio-mode=dup）
+  --no-audio            各ウィンドウで scrcpy 音声転送を無効化
+  --audio-mode MODE     音声モード: dup | output | off (デフォルト: dup)
+  --audio-fallback MODE dup 非対応時フォールバック: off | output (デフォルト: off)
   --dry-run             実行内容を表示するだけ（接続/起動はしない）
   --no-status           バッテリー監視を無効化
   --status-interval SEC  監視更新間隔（秒）
   --status-skip-connect  監視時に adb connect を行わない（デフォルト）
   --status-connect       監視時にも毎回 adb connect を実施
-  --quest-tweaks         Quest OS 向けワークアラウンドを適用（デフォルト: 有効）
+  --quest-tweaks         Quest OS 向けワークアラウンドを適用（デフォルト: 無効）
   --no-quest-tweaks      Quest OS ワークアラウンドを無効化
   --quest-no-guardian    Quest ワークアラウンド時に guardian 操作を行わない
   --quest-no-prox        Quest ワークアラウンド時に prox_close を送らない
@@ -53,7 +57,9 @@ Environment overrides (必要に応じて export してください):
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
   SCRCPY_LAUNCH_DELAY = scrcpy 起動間隔 (秒、デフォルト: 0.4)
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
-  QUEST_TWEAKS_ENABLED  = Quest ワークアラウンド適用可否 (デフォルト: true)
+  SCRCPY_AUDIO_MODE  = 音声モード: dup | output | off (デフォルト: dup)
+  SCRCPY_AUDIO_FALLBACK = dup 非対応時フォールバック: off | output (デフォルト: off)
+  QUEST_TWEAKS_ENABLED  = Quest ワークアラウンド適用可否 (デフォルト: false)
   QUEST_TWEAK_GUARDIAN  = guardian_pause setprop 実行可否 (デフォルト: true)
   QUEST_TWEAK_PROX      = prox_close/prox_open ブロードキャスト可否 (デフォルト: true)
   QUEST_CAPTURE_WIDTH   = debug.oculus.capture.width のデフォルト値
@@ -139,7 +145,7 @@ STATUS_SKIP_CONNECT=false
 RECORD_MODE="off"
 DRY_RUN=false
 BASE_PORT=${SCRCPY_BASE_PORT:-27183}
-QUEST_TWEAKS_ENABLED=${QUEST_TWEAKS_ENABLED:-true}
+QUEST_TWEAKS_ENABLED=${QUEST_TWEAKS_ENABLED:-false}
 QUEST_TWEAK_GUARDIAN=${QUEST_TWEAK_GUARDIAN:-true}
 QUEST_TWEAK_PROX=${QUEST_TWEAK_PROX:-true}
 QUEST_CAPTURE_WIDTH=${QUEST_CAPTURE_WIDTH:-}
@@ -151,12 +157,112 @@ QUEST_REQUIRE_AWAKE=${QUEST_REQUIRE_AWAKE:-true}
 QUEST_AWAKE_TIMEOUT=${QUEST_AWAKE_TIMEOUT:-10}
 QUEST_AWAKE_POLL=${QUEST_AWAKE_POLL:-0.5}
 QUEST_RESTORE_ON_EXIT=${QUEST_RESTORE_ON_EXIT:-true}
+SCRCPY_AUDIO_MODE=${SCRCPY_AUDIO_MODE:-dup}
+SCRCPY_AUDIO_FALLBACK=${SCRCPY_AUDIO_FALLBACK:-off}
 
 if [[ -n ${SCRCPY_EXTRA_ARGS:-} ]]; then
   read -r -a SCRCPY_EXTRA_ARRAY <<<"${SCRCPY_EXTRA_ARGS}"
 else
-  SCRCPY_EXTRA_ARRAY=(--no-audio --no-clipboard )
+  SCRCPY_EXTRA_ARRAY=(--no-clipboard )
 fi
+
+ensure_audio_mode() {
+  local mode="$1"
+  case "${mode}" in
+    dup|output|off) ;;
+    *)
+      log_error "Invalid audio mode: ${mode} (expected: dup | output | off)"
+      exit 1
+      ;;
+  esac
+}
+
+ensure_audio_fallback_mode() {
+  local mode="$1"
+  case "${mode}" in
+    off|output) ;;
+    *)
+      log_error "Invalid audio fallback mode: ${mode} (expected: off | output)"
+      exit 1
+      ;;
+  esac
+}
+
+strip_managed_audio_args() {
+  local arg
+  local -a filtered=()
+  for arg in "${SCRCPY_EXTRA_ARRAY[@]}"; do
+    case "${arg}" in
+      --no-audio|--audio-dup|--audio-source=*) ;;
+      *) filtered+=("${arg}") ;;
+    esac
+  done
+  SCRCPY_EXTRA_ARRAY=("${filtered[@]}")
+}
+
+get_device_sdk() {
+  local endpoint="$1" sdk=""
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    dry_run_command "${ADB_BIN}" -s "${endpoint}" shell getprop ro.build.version.sdk
+    printf '33'
+    return 0
+  fi
+
+  sdk=$("${ADB_BIN}" -s "${endpoint}" shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r')
+  if [[ ${sdk} =~ ^[0-9]+$ ]]; then
+    printf '%s' "${sdk}"
+    return 0
+  fi
+  return 1
+}
+
+DEVICE_AUDIO_MODE_EFFECTIVE=""
+DEVICE_AUDIO_SDK=""
+DEVICE_AUDIO_FALLBACK_USED=false
+DEVICE_AUDIO_FALLBACK_REASON=""
+DEVICE_AUDIO_ARGS=()
+
+build_device_audio_args() {
+  local alias="$1" endpoint="$2"
+  DEVICE_AUDIO_MODE_EFFECTIVE="${SCRCPY_AUDIO_MODE}"
+  DEVICE_AUDIO_SDK=""
+  DEVICE_AUDIO_FALLBACK_USED=false
+  DEVICE_AUDIO_FALLBACK_REASON=""
+  DEVICE_AUDIO_ARGS=()
+
+  case "${SCRCPY_AUDIO_MODE}" in
+    off)
+      DEVICE_AUDIO_ARGS+=("--no-audio")
+      ;;
+    output)
+      ;;
+    dup)
+      if DEVICE_AUDIO_SDK=$(get_device_sdk "${endpoint}"); then
+        if (( DEVICE_AUDIO_SDK >= 33 )); then
+          DEVICE_AUDIO_ARGS+=("--audio-source=playback" "--audio-dup")
+        else
+          DEVICE_AUDIO_MODE_EFFECTIVE="${SCRCPY_AUDIO_FALLBACK}"
+          DEVICE_AUDIO_FALLBACK_USED=true
+          DEVICE_AUDIO_FALLBACK_REASON="sdk=${DEVICE_AUDIO_SDK} (<33)"
+        fi
+      else
+        DEVICE_AUDIO_MODE_EFFECTIVE="${SCRCPY_AUDIO_FALLBACK}"
+        DEVICE_AUDIO_FALLBACK_USED=true
+        DEVICE_AUDIO_FALLBACK_REASON="sdk=unknown"
+      fi
+      ;;
+  esac
+
+  if [[ ${DEVICE_AUDIO_MODE_EFFECTIVE} == "off" ]]; then
+    DEVICE_AUDIO_ARGS=("--no-audio")
+  elif [[ ${DEVICE_AUDIO_MODE_EFFECTIVE} == "output" ]]; then
+    DEVICE_AUDIO_ARGS=()
+  fi
+
+  if [[ ${DEVICE_AUDIO_FALLBACK_USED} == true ]]; then
+    log_warn "${alias}: audio mode fallback ${SCRCPY_AUDIO_MODE} -> ${DEVICE_AUDIO_MODE_EFFECTIVE} (${DEVICE_AUDIO_FALLBACK_REASON})"
+  fi
+}
 
 is_port_in_use() {
   local port="$1"
@@ -357,6 +463,28 @@ case "${ACTION:-}" in
       case "$1" in
         --record) RECORD_MODE="on" ;;
         --no-record) RECORD_MODE="off" ;;
+        --audio) SCRCPY_AUDIO_MODE="dup" ;;
+        --no-audio) SCRCPY_AUDIO_MODE="off" ;;
+        --audio-mode)
+          shift || { log_error "Missing value for --audio-mode"; exit 1; }
+          ensure_audio_mode "$1"
+          SCRCPY_AUDIO_MODE="$1"
+          ;;
+        --audio-mode=*)
+          value=${1#*=}
+          ensure_audio_mode "${value}"
+          SCRCPY_AUDIO_MODE="${value}"
+          ;;
+        --audio-fallback)
+          shift || { log_error "Missing value for --audio-fallback"; exit 1; }
+          ensure_audio_fallback_mode "$1"
+          SCRCPY_AUDIO_FALLBACK="$1"
+          ;;
+        --audio-fallback=*)
+          value=${1#*=}
+          ensure_audio_fallback_mode "${value}"
+          SCRCPY_AUDIO_FALLBACK="${value}"
+          ;;
         --dry-run) DRY_RUN=true ;;
         --no-status) STATUS_ENABLED=false ;;
         --status-interval)
@@ -468,6 +596,10 @@ case "${ACTION:-}" in
     exit 1
     ;;
 esac
+
+ensure_audio_mode "${SCRCPY_AUDIO_MODE}"
+ensure_audio_fallback_mode "${SCRCPY_AUDIO_FALLBACK}"
+strip_managed_audio_args
 
 ensure_positive_integer "${STATUS_INTERVAL}"
 
@@ -603,6 +735,25 @@ start_device() {
     return 1
   fi
 
+  if [[ ${DRY_RUN:-false} == true ]]; then
+    log_info "[dry-run] preparing launch for ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
+  else
+    log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
+  fi
+
+  if ! wait_for_device "${endpoint}"; then
+    log_warn "${alias}: device offline, skipping scrcpy launch"
+    return 0
+  fi
+
+  build_device_audio_args "${alias}" "${endpoint}"
+  log_info "${alias}: audio mode requested=${SCRCPY_AUDIO_MODE} effective=${DEVICE_AUDIO_MODE_EFFECTIVE}${DEVICE_AUDIO_SDK:+ (sdk=${DEVICE_AUDIO_SDK})}"
+
+  apply_quest_tweaks "${alias}" "${endpoint}"
+  wait_for_display_awake "${alias}" "${endpoint}" || true
+
+  restart_scrcpy "${endpoint}"
+
   local -a cmd_base=(
     "${SCRCPY_BIN}"
     "--serial=${endpoint}"
@@ -617,22 +768,16 @@ start_device() {
   if (( ${#SCRCPY_EXTRA_ARRAY[@]} )); then
     cmd_base+=("${SCRCPY_EXTRA_ARRAY[@]}")
   fi
+  if (( ${#DEVICE_AUDIO_ARGS[@]} )); then
+    cmd_base+=("${DEVICE_AUDIO_ARGS[@]}")
+  fi
 
   if [[ ${DRY_RUN:-false} == true ]]; then
-    log_info "[dry-run] preparing launch for ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
-    if ! wait_for_device "${endpoint}"; then
-      log_warn "${alias}: device offline, skipping scrcpy launch"
-      return 0
-    fi
-    apply_quest_tweaks "${alias}" "${endpoint}"
-    wake_quest_display "${alias}" "${endpoint}"
-    wait_for_display_awake "${alias}" "${endpoint}" || true
-    restart_scrcpy "${endpoint}"
-    local -a preview_record=()
+    local -a preview_cmd=("${cmd_base[@]}")
     if [[ ${RECORD_MODE} == "on" ]]; then
-      preview_record=("--record=${record_base}.mp4")
+      preview_cmd+=("--record=${record_base}.mp4")
     fi
-    dry_run_command "${cmd_base[@]}" "${preview_record[@]}"
+    dry_run_command "${preview_cmd[@]}"
     dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
     return 0
   else

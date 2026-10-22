@@ -50,8 +50,11 @@ Environment overrides (必要に応じて export してください):
   DISPLAY_WIDTH      = メイン表示領域の幅 px (デフォルト: 2560)
   DISPLAY_HEIGHT     = メイン表示領域の高さ px (デフォルト: 1440)
   WINDOW_MARGIN      = ウィンドウ間マージン px (デフォルト: 16)
-  BIT_RATE           = scrcpy ビットレート (デフォルト: 10M)
-  MAX_SIZE           = scrcpy 最大長辺 px (デフォルト: 1600)
+  BIT_RATE           = scrcpy ビットレート (デフォルト: 4M)
+  MAX_SIZE           = scrcpy 最大長辺 px (デフォルト: 1280)
+  MAX_FPS            = キャプチャの上限 fps (デフォルト: 30)
+  VIDEO_BUFFER       = 映像バッファ ms (デフォルト: 0、Wi-Fi揺らぎ対策: 50)
+  SCRCPY_HWDEC       = デコード: auto | disabled | videotoolbox (デフォルト: auto)
   RECORD_DIR         = 録画ファイル保存先 (デフォルト: ./recordings)
   STATUS_INTERVAL    = バッテリー監視の更新間隔（秒、デフォルト: 60）
   SCRCPY_BASE_PORT   = ローカルポートの開始番号 (デフォルト: 27183)
@@ -96,7 +99,7 @@ format_command() {
 
 dry_run_command() {
   [[ ${DRY_RUN:-false} == true ]] || return 0
-  printf '[dry-run] %s\n' "$(format_command "$@")"
+  printf '[dry-run] %s\n' "$(format_command "$@")" >&2
 }
 
 run_cmd() {
@@ -157,13 +160,15 @@ QUEST_REQUIRE_AWAKE=${QUEST_REQUIRE_AWAKE:-true}
 QUEST_AWAKE_TIMEOUT=${QUEST_AWAKE_TIMEOUT:-10}
 QUEST_AWAKE_POLL=${QUEST_AWAKE_POLL:-0.5}
 QUEST_RESTORE_ON_EXIT=${QUEST_RESTORE_ON_EXIT:-true}
+SCRCPY_HWDEC=${SCRCPY_HWDEC:-auto}
+SCRCPY_HWDEC_ARGS=()
 SCRCPY_AUDIO_MODE=${SCRCPY_AUDIO_MODE:-dup}
 SCRCPY_AUDIO_FALLBACK=${SCRCPY_AUDIO_FALLBACK:-off}
 
 if [[ -n ${SCRCPY_EXTRA_ARGS:-} ]]; then
   read -r -a SCRCPY_EXTRA_ARRAY <<<"${SCRCPY_EXTRA_ARGS}"
 else
-  SCRCPY_EXTRA_ARRAY=(--no-clipboard )
+  SCRCPY_EXTRA_ARRAY=(--no-clipboard-autosync)
 fi
 
 ensure_audio_mode() {
@@ -306,13 +311,6 @@ wait_for_device() {
   return 1
 }
 
-restart_scrcpy() {
-  local endpoint="$1"
-  if command -v pkill >/dev/null 2>&1; then
-    run_cmd_quiet pkill -f "scrcpy --serial=${endpoint}" || true
-  fi
-}
-
 apply_quest_tweaks() {
   local alias="$1" endpoint="$2" applied=false
   [[ ${QUEST_TWEAKS_ENABLED} == true ]] || return 0
@@ -352,7 +350,6 @@ apply_quest_tweaks() {
 wake_quest_display() {
   local alias="$1" endpoint="$2"
   run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_WAKEUP || true
-  run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell input keyevent KEYCODE_HOME || true
   log_info "${alias}: nudged display awake"
 }
 
@@ -628,6 +625,19 @@ if [[ ${ACTION} == "start" ]]; then
     fi
   fi
   [[ -n ${SCRCPY_BIN:-} && -x ${SCRCPY_BIN:-} ]] || { log_error "scrcpy not found."; exit 1; }
+  case "${SCRCPY_HWDEC}" in
+    auto|disabled|videotoolbox) ;;
+    *) log_error "Invalid SCRCPY_HWDEC: ${SCRCPY_HWDEC}"; exit 1 ;;
+  esac
+  scrcpy_help=$("${SCRCPY_BIN}" --help)
+  if [[ ${scrcpy_help} == *"--hwdec="* ]]; then
+    SCRCPY_HWDEC_ARGS=("--hwdec=${SCRCPY_HWDEC}")
+  elif [[ ${SCRCPY_HWDEC} != auto ]]; then
+    log_error "Hardware decoder selection requires scrcpy 5.0+. Run bootstrap_binaries.sh."
+    exit 1
+  else
+    log_warn "scrcpy lacks hardware decoding; run bootstrap_binaries.sh to update to 5.0.1."
+  fi
 fi
 
 [[ -f "${CONFIG}" ]] || { log_error "CONFIG not found: ${CONFIG}"; exit 1; }
@@ -645,7 +655,6 @@ ALIASES=()
 ENDPOINTS=()
 COLS=()
 ROWS=()
-UNREACHABLE_COUNTS=()
 SCRCPY_PIDS=()
 LAUNCH_ATTEMPTS=()
 STATUS_PID=""
@@ -660,7 +669,6 @@ for entry in "${RAW_DEVICES[@]}"; do
   ENDPOINTS+=("${endpoint}")
   COLS+=("${col:-}")
   ROWS+=("${row:-}")
-  UNREACHABLE_COUNTS+=(0)
   LAUNCH_ATTEMPTS+=(0)
 
 done
@@ -674,9 +682,16 @@ if [[ ${ACTION} == "start" ]]; then
   DISPLAY_WIDTH=${DISPLAY_WIDTH:-2560}
   DISPLAY_HEIGHT=${DISPLAY_HEIGHT:-1440}
   WINDOW_MARGIN=${WINDOW_MARGIN:-16}
-  BIT_RATE=${BIT_RATE:-10M}
-  MAX_SIZE=${MAX_SIZE:-1600}
+  BIT_RATE=${BIT_RATE:-4M}
+  MAX_SIZE=${MAX_SIZE:-1280}
+  MAX_FPS=${MAX_FPS:-30}
+  VIDEO_BUFFER=${VIDEO_BUFFER:-0}
+  ensure_positive_integer "${MAX_SIZE}"
+  ensure_positive_integer "${MAX_FPS}"
+  [[ ${VIDEO_BUFFER} =~ ^[0-9]+$ ]] || { log_error "Invalid VIDEO_BUFFER: ${VIDEO_BUFFER}"; exit 1; }
   RECORD_DIR=${RECORD_DIR:-"$(pwd)/recordings"}
+  ensure_positive_integer "${BASE_PORT}"
+  (( BASE_PORT + COUNT * 100 - 1 <= 65535 )) || { log_error "SCRCPY_BASE_PORT range exceeds 65535"; exit 1; }
   TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
   (( COUNT <= MAX_DEVICES )) || {
@@ -728,7 +743,7 @@ start_device() {
     record_base="${RECORD_DIR}/${sanitized_alias}_${TIMESTAMP}${attempt_suffix}"
   fi
 
-  local requested_port=$(( BASE_PORT + index ))
+  local requested_port=$(( BASE_PORT + index * 100 ))
   local port
   if ! port=$(find_free_port "${requested_port}"); then
     log_error "${alias}: unable to find free port starting at ${requested_port}"
@@ -741,19 +756,6 @@ start_device() {
     log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
   fi
 
-  if ! wait_for_device "${endpoint}"; then
-    log_warn "${alias}: device offline, skipping scrcpy launch"
-    return 0
-  fi
-
-  build_device_audio_args "${alias}" "${endpoint}"
-  log_info "${alias}: audio mode requested=${SCRCPY_AUDIO_MODE} effective=${DEVICE_AUDIO_MODE_EFFECTIVE}${DEVICE_AUDIO_SDK:+ (sdk=${DEVICE_AUDIO_SDK})}"
-
-  apply_quest_tweaks "${alias}" "${endpoint}"
-  wait_for_display_awake "${alias}" "${endpoint}" || true
-
-  restart_scrcpy "${endpoint}"
-
   local -a cmd_base=(
     "${SCRCPY_BIN}"
     "--serial=${endpoint}"
@@ -762,45 +764,72 @@ start_device() {
     "--window-width=${WINDOW_WIDTH}" "--window-height=${WINDOW_HEIGHT}"
     "--video-bit-rate=${BIT_RATE}"
     "--max-size=${MAX_SIZE}"
+    "--max-fps=${MAX_FPS}"
+    "--video-buffer=${VIDEO_BUFFER}"
     "--stay-awake"
     "--port=${port}"
   )
   if (( ${#SCRCPY_EXTRA_ARRAY[@]} )); then
     cmd_base+=("${SCRCPY_EXTRA_ARRAY[@]}")
   fi
-  if (( ${#DEVICE_AUDIO_ARGS[@]} )); then
-    cmd_base+=("${DEVICE_AUDIO_ARGS[@]}")
+  if (( ${#SCRCPY_HWDEC_ARGS[@]} )); then
+    cmd_base+=("${SCRCPY_HWDEC_ARGS[@]}")
   fi
 
   if [[ ${DRY_RUN:-false} == true ]]; then
+    build_device_audio_args "${alias}" "${endpoint}"
+    apply_quest_tweaks "${alias}" "${endpoint}"
+    wake_quest_display "${alias}" "${endpoint}"
     local -a preview_cmd=("${cmd_base[@]}")
+    if (( ${#DEVICE_AUDIO_ARGS[@]} )); then
+      preview_cmd+=("${DEVICE_AUDIO_ARGS[@]}")
+    fi
     if [[ ${RECORD_MODE} == "on" ]]; then
       preview_cmd+=("--record=${record_base}.mp4")
     fi
     dry_run_command "${preview_cmd[@]}"
     dry_run_command sleep "${SCRCPY_LAUNCH_DELAY:-0.4}"
     return 0
-  else
-    log_info "Launching ${alias} (${endpoint}) at x=${x}, y=${y}, port=${port}"
   fi
 
   (
-    if ! wait_for_device "${endpoint}"; then
-      log_warn "${alias}: device offline, skipping scrcpy launch"
+    # Each worker owns exactly one scrcpy child, including reconnects and shutdown.
+    scrcpy_pid=""
+    logger_pid=""
+    local log_dir
+    log_dir=$(mktemp -d)
+    mkfifo "${log_dir}/output"
+    stop_worker() {
+      trap - INT TERM EXIT
+      if [[ -n ${scrcpy_pid} ]]; then
+        kill "${scrcpy_pid}" >/dev/null 2>&1 || true
+        wait "${scrcpy_pid}" >/dev/null 2>&1 || true
+      fi
+      if [[ -n ${logger_pid} ]]; then
+        kill "${logger_pid}" >/dev/null 2>&1 || true
+        wait "${logger_pid}" >/dev/null 2>&1 || true
+      fi
+      rm -rf "${log_dir}"
       exit 0
-    fi
-
-    apply_quest_tweaks "${alias}" "${endpoint}"
-    wake_quest_display "${alias}" "${endpoint}"
-    wait_for_display_awake "${alias}" "${endpoint}" || true
-
-    restart_scrcpy "${endpoint}"
-
+    }
+    trap stop_worker INT TERM EXIT
     local retry_counter=0
     while true; do
       retry_counter=$((retry_counter + 1))
+      if ! wait_for_device "${endpoint}"; then
+        log_warn "${alias}: offline, retrying connection in 3s"
+        sleep 3
+        continue
+      fi
+      build_device_audio_args "${alias}" "${endpoint}"
+      apply_quest_tweaks "${alias}" "${endpoint}"
+      wake_quest_display "${alias}" "${endpoint}"
+      wait_for_display_awake "${alias}" "${endpoint}" || true
       local record_path="" retry_suffix=""
       local -a cmd=("${cmd_base[@]}")
+      if (( ${#DEVICE_AUDIO_ARGS[@]} )); then
+        cmd+=("${DEVICE_AUDIO_ARGS[@]}")
+      fi
       if [[ ${RECORD_MODE} == "on" ]]; then
         if (( retry_counter > 1 )); then
           retry_suffix=$(printf '_retry%02d' "${retry_counter}")
@@ -808,10 +837,18 @@ start_device() {
         record_path="${record_base}${retry_suffix}.mp4"
         cmd+=("--record=${record_path}")
       fi
-      "${cmd[@]}" 2>&1 | while IFS= read -r line; do
+      while IFS= read -r line; do
         printf '[%s] %s\n' "${alias}" "${line}"
-      done
-      status=${PIPESTATUS[0]:-0}
+      done < "${log_dir}/output" &
+      logger_pid=$!
+      "${cmd[@]}" > "${log_dir}/output" 2>&1 &
+      scrcpy_pid=$!
+      # A failed wait must be guarded: errexit would otherwise disable retries.
+      local status=0
+      wait "${scrcpy_pid}" || status=$?
+      scrcpy_pid=""
+      wait "${logger_pid}" || true
+      logger_pid=""
       if (( status == 0 )); then
         log_info "scrcpy exited normally for ${alias}"
         break
@@ -835,23 +872,10 @@ status_device() {
   local output
   if ! output=$("${ADB_BIN}" -s "${endpoint}" shell dumpsys battery 2>/dev/null); then
     printf '    %-12s %-22s %s\n' "${alias}" "${endpoint}" "(unreachable)"
-    if [[ ${ACTION} == "start" && ${DRY_RUN} == false ]]; then
-      local count=${UNREACHABLE_COUNTS[$index]:-0}
-      count=$((count + 1))
-      UNREACHABLE_COUNTS[$index]=$count
-      if (( count == 1 )); then
-        log_warn "${alias}: unreachable (will retry next cycle)"
-      elif (( count >= 2 )); then
-        log_warn "${alias}: unreachable for ${count} checks, restarting scrcpy"
-        restart_scrcpy "${endpoint}"
-        start_device "${alias}" "${endpoint}" "${COLS[$index]}" "${ROWS[$index]}" "${index}"
-        UNREACHABLE_COUNTS[$index]=0
-      fi
-    fi
+    # Recovery belongs to the device worker; the status process never launches
+    # another supervisor for the same headset.
     return
   fi
-
-  UNREACHABLE_COUNTS[$index]=0
 
   local level status_code ac usb wireless
   level=$(printf '%s\n' "${output}" | awk -F': ' '/level:/ {print $2; exit}')
@@ -921,11 +945,6 @@ fi
 cleanup() {
   trap - INT TERM EXIT
   log_info "Stopping all scrcpy/status subprocesses"
-  if [[ ${#ENDPOINTS[@]} -gt 0 ]]; then
-    for endpoint in "${ENDPOINTS[@]}"; do
-      restart_scrcpy "${endpoint}"
-    done
-  fi
   if [[ -n ${SCRCPY_PIDS+x} ]]; then
     for pid in "${SCRCPY_PIDS[@]}"; do
       kill "${pid}" >/dev/null 2>&1 || true

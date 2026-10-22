@@ -12,7 +12,7 @@ dependencies:
   - meson
   - ninja
   - pkg-config
-  - sdl2
+  - sdl3
   - ffmpeg
   - libusb
   - openjdk=17

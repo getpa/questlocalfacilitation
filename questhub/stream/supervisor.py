@@ -72,6 +72,7 @@ class StreamSupervisor:
         self.black_diag_file: str | None = None
         self.last_recovery: str | None = None
         self._recovery_task: asyncio.Task | None = None
+        self.prox_nudged = False               # recovery forced "worn"; release it when done
 
     # ------------------------------------------------------------ lifecycle
 
@@ -79,8 +80,21 @@ class StreamSupervisor:
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._run())
 
+    async def release_proximity(self) -> None:
+        """Undo a recovery prox_close so the headset can sleep normally again."""
+        if not self.prox_nudged:
+            return
+        target = self.target_fn()
+        if target:
+            await quest.release_proximity(self.adb.for_serial(target))
+            self.prox_nudged = False
+
     async def stop(self) -> None:
         self._cancel_recovery()
+        try:
+            await self.release_proximity()
+        except Exception as exc:
+            log.debug("release proximity failed: %s", exc)
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
@@ -211,6 +225,7 @@ class StreamSupervisor:
             await quest.wake(adb)
             if self.prox_nudge:
                 await adb.shell("am broadcast -a com.oculus.vrpowermanager.prox_close", check=False)
+                self.prox_nudged = True
         elif step == "restart" and self._server and self.state == "streaming":
             self._reconfigure = True
             self._streaming.clear()

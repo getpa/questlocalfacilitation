@@ -49,7 +49,7 @@
    本レポジトリ直下に `scripts/` と録画保存用 `recordings/` を作成しておく。
 
 ### 1.3 Quest OS の近接センサー対策
-Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください。
+Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください（現行の Horizon OS は `prox_open` を受け付けないため、`restore` は `automation_disable` も送って近接センサーを実機の判定に戻します。戻っているかは `adb shell dumpsys vrpowermanager | grep 'proximity state'` が `DISABLED` になっていることで確認できます）。
 
 ```bash
 ./scripts/quest_os_tweaks.sh engage --capture-width 1920 --capture-height 1920 --capture-full-rate 1 --capture-eye 2

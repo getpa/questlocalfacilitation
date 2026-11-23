@@ -391,6 +391,8 @@ restore_quest_tweaks() {
   fi
   if [[ ${QUEST_TWEAK_PROX} == true ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open || true
+    # Newer Horizon OS ignores prox_open; automation_disable hands the sensor back to the hardware.
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.automation_disable || true
   fi
   if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" || true

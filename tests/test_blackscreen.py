@@ -131,6 +131,8 @@ class SupervisorRecoveryTests(unittest.TestCase):
         self.assertTrue(any(e["data"].get("cause") for e in events))
         self.assertEqual(events[-1]["data"].get("black"), False)
         self.assertEqual(events[-1]["data"].get("recovered_by"), "restart")
+        self.assertIn("am broadcast -a com.oculus.vrpowermanager.automation_disable", shell,
+                      "the forced 'worn' state is released when the stream stops")
 
 
 if __name__ == "__main__":

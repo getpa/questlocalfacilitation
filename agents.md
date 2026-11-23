@@ -8,6 +8,9 @@
 
 ## 0. 構成の全体像
 
+> **GUI 版（Quest Hub）**: `./questhub.command` で、Wi-Fi 化・端末台帳（IP/SSID/電池）・最大50台のグリッド表示（音声・操作）・録画・ブラウザビューワー（PC/Android/iPad）をすべてブラウザから操作できます。使い方は README の「Quest Hub GUI」、設計は `docs/GUI_DESIGN.md`。以下は CLI（scrcpy ウィンドウ方式）の運用ガイドです。GUI と CLI を同時に同じ端末へ使わないでください（CLI は GUI 起動中に警告します）。
+
+
 - **各 Quest 3**：Developer Mode ON → USB デバッグ常時許可 → 同一LAN（推奨：Wi-Fi 6 / 6E、5GHz以上）
 - **Mac**：`./install.sh` で `adb` と `scrcpy` をリポジトリ内に導入（Homebrew / conda 不要）
 - **初回接続**：USB → `adb tcpip 5555` → 端末IP固定 or DHCP予約 → 以後は Wi-Fi (`adb connect <IP>:5555`)

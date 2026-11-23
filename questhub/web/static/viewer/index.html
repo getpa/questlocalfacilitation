@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub ビューワー</title>
+<link rel="stylesheet" href="/static/common/style.css">
+</head>
+<body>
+<header class="topbar">
+  <strong class="brand">Quest Hub ビューワー</strong>
+  <span id="summary" class="muted"></span>
+  <span class="sep"></span>
+  <label>列 <select id="cols"><option value="auto">自動</option></select></label>
+  <form method="post" action="/logout"><button>ログアウト</button></form>
+</header>
+<main>
+  <p id="unsupported" class="empty" hidden>このブラウザは WebCodecs（映像デコード）に対応していないか、安全な接続（HTTPS）ではありません。Chrome / Edge / Safari の最新版で、証明書を導入したうえで開いてください。</p>
+  <p id="empty" class="empty" hidden>表示中の端末はありません。</p>
+  <div id="grid" class="grid"></div>
+  <p class="hint muted">一覧は低フレームレート（キーフレームのみ）で表示します。タイルをクリックすると、その1台をフレームレートを落とさずに表示します。</p>
+</main>
+<div id="focus" class="overlay" hidden>
+  <div class="focus-panel">
+    <div class="focus-head"><strong id="focus-title"></strong><span id="focus-info" class="muted"></span><span class="sep"></span>
+      <button id="focus-audio">音声を再生</button><button id="focus-close">閉じる</button></div>
+    <canvas id="focus-canvas" class="focus-canvas" width="1280" height="684"></canvas>
+  </div>
+</div>
+<div id="toasts"></div>
+<script type="module" src="/static/viewer/viewer.js"></script>
+</body>
+</html>

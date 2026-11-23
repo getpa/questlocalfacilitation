@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub 証明書の導入</title>
+<style>
+  body { font: 15px/1.6 system-ui, sans-serif; margin: 0 auto; max-width: 720px; padding: 16px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 24px; }
+  a.button { display: inline-block; padding: 8px 14px; border: 1px solid #2b6cb0; border-radius: 6px; color: #2b6cb0; text-decoration: none; margin: 4px 0; }
+  code, small { word-break: break-all; }
+  .qr svg { width: 160px; height: 160px; }
+</style>
+</head>
+<body>
+<h1>Quest Hub ビューワーの準備</h1>
+<p>ビューワーは HTTPS で表示します。各端末で <strong>1回だけ</strong>、次の証明書を「信頼」として登録してください。</p>
+<p>証明書の指紋（SHA-256）: <small>{{FINGERPRINT}}</small><br>管理画面に表示されている指紋と同じであることを確認してください。</p>
+
+<h2>iPad / iPhone</h2>
+<p><a class="button" href="/ca.mobileconfig">構成プロファイルをダウンロード</a></p>
+<ol>
+  <li>Safari で上のボタンを押し、「許可」を選ぶ</li>
+  <li>設定アプリ ＞「プロファイルがダウンロードされました」＞ インストール</li>
+  <li>設定 ＞ 一般 ＞ 情報 ＞ 証明書信頼設定 で「Quest Hub Local CA」をオン</li>
+</ol>
+
+<h2>Android（Chrome）</h2>
+<p><a class="button" href="/ca.crt">CA 証明書をダウンロード</a></p>
+<ol>
+  <li>設定 ＞ セキュリティ ＞ 暗号化と認証情報 ＞ 証明書のインストール ＞ CA 証明書</li>
+  <li>ダウンロードした QuestHubLocalCA.crt を選ぶ</li>
+</ol>
+
+<h2>Mac（Chrome / Safari）</h2>
+<p><a class="button" href="/ca.crt">CA 証明書をダウンロード</a></p>
+<ol>
+  <li>ダウンロードしたファイルを開き、キーチェーン「ログイン」に追加</li>
+  <li>キーチェーンアクセスで「Quest Hub Local CA」を開き、「信頼」＞「常に信頼」</li>
+</ol>
+
+<h2>Windows（Chrome / Edge）</h2>
+<p><a class="button" href="/ca.cer">CA 証明書をダウンロード</a></p>
+<ol>
+  <li>ダウンロードしたファイルを開き「証明書のインストール」</li>
+  <li>「証明書をすべて次のストアに配置する」＞「信頼されたルート証明機関」</li>
+</ol>
+
+<h2>ビューワーを開く</h2>
+<p><a class="button" href="{{VIEWER_URL}}">{{VIEWER_URL}}</a></p>
+<div class="qr">{{QR_VIEWER}}</div>
+</body>
+</html>

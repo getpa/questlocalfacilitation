@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub ビューワー</title>
+<link rel="stylesheet" href="/static/common/style.css">
+</head>
+<body>
+<main style="max-width: 360px; margin: 10vh auto;">
+  <div class="card">
+    <h2>Quest Hub ビューワー</h2>
+    <form id="login" class="row">
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="アクセスコード（6桁）" size="14" autofocus>
+      <button class="primary">開く</button>
+    </form>
+    <p id="error" class="muted"></p>
+    <p class="hint muted">アクセスコードは管理画面の「設定・ビューワー」に表示されています。</p>
+  </div>
+</main>
+<script>
+document.getElementById('login').onsubmit = async (e) => {
+  e.preventDefault();
+  const res = await fetch('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: document.getElementById('code').value }) });
+  if (res.ok) location.reload();
+  else document.getElementById('error').textContent = (await res.json()).detail || 'ログインできません';
+};
+</script>
+</body>
+</html>

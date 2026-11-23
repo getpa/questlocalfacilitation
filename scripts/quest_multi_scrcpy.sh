@@ -680,6 +680,17 @@ if [[ ${ACTION} == "start" ]]; then
   fi
 fi
 
+if [[ ${ACTION} == "start" ]]; then
+  # Quest Hub GUI (python -m questhub) holds this lock while it runs.
+  qh_lock="${QH_DATA_DIR:-${HOME}/.questhub}/questhub.lock"
+  if [[ -f ${qh_lock} ]]; then
+    qh_pid=$(tr -cd '0-9' < "${qh_lock}")
+    if [[ -n ${qh_pid} ]] && kill -0 "${qh_pid}" 2>/dev/null; then
+      log_warn "Quest Hub GUI is running (pid ${qh_pid}); capturing the same headsets twice doubles their encoder and Wi-Fi load"
+    fi
+  fi
+fi
+
 [[ -f "${CONFIG}" ]] || { log_error "CONFIG not found: ${CONFIG}"; exit 1; }
 
 RAW_DEVICES=()

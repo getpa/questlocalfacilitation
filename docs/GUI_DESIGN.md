@@ -1,6 +1,6 @@
 # Quest Hub (GUI版) 技術検討・設計書
 
-- ステータス: Draft v0.4（2026-11-23）— Phase 0a 実装済み、Phase 0b（PoC）実施済み（§7.1）
+- ステータス: v0.9（2026-11-23）— Phase 0a・0b・M1〜M6 実装済み（§11）
   - v0.2: 要件の確定事項（§1.1）を反映
   - v0.3: モジュールの責任分離を見直し（§3）、接続先SSIDの収集（R7, §4.9）を追加
   - v0.4: Mambaforge を前提にしない環境構築インストーラー（§9, Phase 0a）を追加
@@ -8,6 +8,7 @@
   - v0.6: **目標台数を30台から50台に変更**（2026-11-23）。50台の負荷検証（§7.2）、帯域・性能見積もり（§6）を更新
   - v0.7: キャプチャ品質プリセット（low / standard / high）と帯域の目安（§4.3）
   - v0.8: ビューワーの単一表示（フォーカス）。マルチキャストや直接受信の検討（§4.6）。高画質の並行ストリームは検討のみで **deprecated**
+  - v0.9: **M2〜M6 実装完了**（§11 実装状況と設計からの差分）
 - 対象: 既存CLI（`scripts/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -625,3 +626,43 @@ questhub.command               # 起動用ラッパー（.mamba-env/bin/python -
 4. ~~想定SSIDの運用~~ → 解決: SSID は任意、稼働中の変更を警告（2026-11-23）。
 5. リポジトリを公開するか（非開発者向けのワンライナー配布ができるかが決まる）。非公開なら、配布用の tarball を別途用意する方法を検討する。
 6. 対象 macOS の最低バージョン（13 Ventura 以上を想定）と、Intel Mac をサポートし続けるか。
+
+## 11. 実装状況（2026-11-23）
+
+| マイルストーン | 状態 | 主なモジュール |
+|---------------|------|---------------|
+| 0a インストーラー | 完了 | `install.sh`, `locks/`, `environment*.yml` |
+| 0b PoC | 完了 | `questhub/poc/`（単体の検証用として残す） |
+| M1 50台負荷検証 | 完了 | `tools/loadtest.py`（§7.2） |
+| M2 基盤と端末管理 | 完了 | `core/events`, `config`, `adb/{client,tracker}`, `devices/{registry,manager,provisioning,discovery,telemetry,quest}`, `services/{provisioning,telemetry}` |
+| M3 複数台表示 | 完了 | `stream/supervisor`, `services/streaming`, `web/media_ws`, `web/static/host`（グリッド・フォーカス・座席のドラッグ・自動の低fps切替） |
+| M4 録画 | 完了 | `services/recording`, `record/recorder`（解像度・SPS変更でパート分割） |
+| M5 ビューワー | 完了 | `web/{viewer,tls,auth,qr,servers}`, `web/static/viewer` |
+| M6 入力・仕上げ | 完了 | `stream/control`, `services/input`, 授業終了（録画停止・ビューワー停止・`adb usb`）、ネットワーク画面、CLI のロック警告 |
+
+起動: `./questhub.command`（`python -m questhub`）。管理画面 `http://127.0.0.1:8765/`、ビューワー `https://<Mac の IP>:8443/`、証明書配布 `http://<Mac の IP>:8766/`。
+
+**実機で確認したこと（Quest 3 1台、Chromium のアプリ内ブラウザ）**
+- 自動検出 → 台帳登録（シリアル・IP・SSID・電池）→ 自動で表示開始。
+- 管理画面からの Wi-Fi 化（`tcpip` → 再接続 → ストリーム自動復帰）。
+- 録画（MKV・映像+音声）と、録画中の品質変更の拒否。
+- キー入力（WAKEUP）。
+- ネイティブ表示中のキャプチャ一時停止と再開。
+- 授業終了（`adb usb`）→ USB から再度 Wi-Fi 化。
+- ビューワー（ログイン、キーフレームのみのグリッド 0.5fps、フォーカス 29fps、IP / SSID を返さない）。HTTPS は CA で検証でき、CA なしでは拒否されることを確認した。
+
+**設計からの差分**
+- 設定は TOML ではなく JSON（`~/.questhub/settings.json`）。
+- 起動ラッパーは `questhub.command`（`questhub/` パッケージと名前が衝突しないため）。`.app` 化は未実施。
+- CLI の TSV から読み込んだ端末は、シリアルが分かるまで `tsv:<ip:port>` という仮キーで登録し、初回接続時に本来のシリアルへ統合する。
+- 録画は再接続でファイルを分けず、解像度または SPS/PPS が変わったときだけ `_partNN` に分割する（PTS は同じ時計なので、再接続をまたいでも1ファイルで再生できる）。
+- 「授業を終了」の後は自動表示を止め、「全台表示」や個別の表示開始で再開する。
+- 開発用に、ビューワーを HTTP で公開する設定（`viewer_insecure_http`）を用意した。localhost での確認専用。
+- フォーカスは、その端末の現在の品質で全フレーム配信する（高画質の並行ストリームは deprecated、§4.6）。
+- ビューワーの全フレーム配信は、視聴者1人につき1台、全体で8台まで。
+
+**未検証・残課題**
+- 複数台の実機（実機は1台。50台はリプレイで検証、§7.2）、性能の低い Mac、Chrome 本体、Safari。
+- P4 / P7（iPad・Android でのビューワーと Opus 再生）、P5（未装着時の黒画面）。
+- P8（VR の 3D UI へのタッチ注入）。キー入力は動作した。
+- MSE のフォールバック（WebCodecs 非対応ブラウザには「非対応」と表示するのみ）。

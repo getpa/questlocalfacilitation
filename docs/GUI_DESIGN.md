@@ -4,6 +4,7 @@
   - v0.2: 要件の確定事項（§1.1）を反映
   - v0.3: モジュールの責任分離を見直し（§3）、接続先SSIDの収集（R7, §4.9）を追加
   - v0.4: Mambaforge を前提にしない環境構築インストーラー（§9, Phase 0a）を追加
+  - v0.5: SSID は任意とし稼働中の変更を警告（§4.9）、ビューワーの対象を Chrome / WebKit 系の PC・Android・iPad に拡大（§4.6）、検証方針（§1.1）
 - 対象: 既存CLI（`scripts/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 最大30台 / 同一LAN / scrcpy 5.0.1
 
@@ -17,9 +18,9 @@
 | R2 | IPアドレスの取得・保存 | 端末ごとに Alias / IP / ポート / 配置 を永続化 |
 | R3 | 画面の表示（音声つき） | 最大30台をグリッド表示、1台拡大表示、選択した端末の音声を再生 |
 | R4 | 録画の開始・停止（音声つき） | 全台/選択台、表示と独立に開始・停止 |
-| R5 | HTTPSで接続できる簡易ビューワー | iPad等から閲覧。低フレームレートで負荷を抑える |
+| R5 | HTTPSで接続できる簡易ビューワー | Chrome / WebKit 系ブラウザ（PC・Android・iPad）から閲覧。低フレームレートで負荷を抑える |
 | R6 | 入力操作（可能であれば） | ホストGUIからタップ・キー送信。優先度は低 |
-| R7 | **接続先SSIDの収集** | 端末ごとの SSID（+ BSSID・帯域・電波強度）を取得・表示・保存し、想定外のSSIDを警告 |
+| R7 | **接続先SSIDの収集** | 端末ごとの SSID（+ BSSID・帯域・電波強度）を取得・表示・保存する。SSID は任意で、**稼働中に変わったら警告** |
 
 ### 1.1 確定事項（2026-11-23）
 
@@ -27,9 +28,11 @@
 |------|------|-------------|
 | ホストのブラウザ | **Chrome 前提** | WebCodecs を標準で使う。デスクトップの殻は Chrome の `--app` ウィンドウ（§3.1） |
 | 音声 | **必要** | scrcpy の音声ソケットを使う。録画は映像+音声、ライブ再生は選択した1台のみ（§4.4） |
-| ビューワー | **iPad等、低fps、自己署名証明書OK** | HTTPS + WebCodecs に一本化。グリッドはキーフレームのみ配信（§4.6） |
+| ビューワー | **Chrome / WebKit 系（PC・Android・iPad）、低fps、自己署名証明書OK** | HTTPS + WebCodecs に一本化。グリッドはキーフレームのみ配信（§4.6）。**検証は PC のブラウザから**始め、iPad は用意でき次第 |
 | 入力操作 | **可能であれば** | 制御ソケットで実装。Phase 5（任意）とし、ホストGUIのみ（§4.5） |
-| SSID | **収集する** | 接続状態の監視に Wi-Fi 情報を含める（§4.9） |
+| SSID | **任意のSSIDで動作。稼働中に変わったら警告**（2026-11-23 更新） | 想定SSIDの設定は持たない。各端末の基準SSIDからの変化を検知する（§4.9） |
+| 検証用ブラウザ | **アプリ内ブラウザ（Chromium）で代用**（開発機に Chrome がないため） | WebCodecs の挙動は Chromium 系として確認。Chrome 固有の差は未確認として扱う |
+| ブランチ運用 | PR #3 をマージし、以降はマイルストーンごとにブランチと PR を分ける | — |
 
 非機能要求（推定。要確認）
 - N1: 30台 × 4Mbps（既存標準）で破綻しない。ホスト表示の遅延は scrcpy ネイティブ並み（〜100ms台）。
@@ -104,7 +107,7 @@ Quest 3 ──(adb forward)──▶ StreamSupervisor ──▶ FrameHub ─┬�
 ```
 questhub/
   __main__.py                  # 起動（サーバー + Chrome --app）、依存の組み立て（DI）
-  config.py                    # 設定値（ポート、映像/音声、保存先、想定SSID）
+  config.py                    # 設定値（ポート、映像/音声、保存先）
   core/
     events.py                  # 型付きイベントバス（asyncio）
   adb/
@@ -131,7 +134,7 @@ questhub/
     streaming.py               # ユースケース: 映像の開始・停止、CLIとのロック、ネイティブで開く
     recording.py               # ユースケース: 録画セッション、ディスク監視、ファイル名規則
     input.py                   # ユースケース: 単体・一括入力（%座標 → px）
-    telemetry.py               # ユースケース: 定期計測、SSID不一致などの警告判定
+    telemetry.py               # ユースケース: 定期計測、SSID変更などの警告判定
   web/
     app.py                     # REST / WS のルーティングのみ
     media_ws.py                # 映像WSの購読アダプタ（間引き・バックプレッシャー）
@@ -267,9 +270,16 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 - 経路: `/ws/control/{serial}` → `services/input` → `supervisor` が持つ制御チャネル → `stream/control` でシリアライズ。
 - VR の 3D UI ではタッチの注入が効かない場面がある。その場合は「ネイティブで開く」で代用する。
 
-### 4.6 R5: iPadビューワー（HTTPS・低fps）
+### 4.6 R5: ブラウザビューワー（HTTPS・低fps）
 
-**方式: HTTPS + WebCodecs に一本化**（iPadOS 16.4 以降の Safari は H.264 の `VideoDecoder` に対応）。
+**対象**: Chrome 系（PC の Chrome / Edge、Android の Chrome）と WebKit 系（Mac の Safari、iPad / iPhone の Safari）。**検証は PC から**行い、Android・iPad は実機が用意でき次第。
+
+**方式: HTTPS + WebCodecs に一本化**（Chrome 94 以降、Safari / iPadOS 16.4 以降は H.264 の `VideoDecoder` に対応）。WebCodecs が使えないブラウザには「非対応」と表示する（MSE フォールバックは必要になった時点で検討）。
+
+**証明書の導入（端末ごとに1回）**
+- PC（macOS / Windows）: CA証明書をダウンロードし、OSの証明書ストアに「信頼」で登録する。Chrome は OS の信頼設定を使う。
+- Android: 設定 > セキュリティ > 暗号化と認証情報 > 証明書のインストール > CA 証明書。
+- iPad / iPhone: 構成プロファイル（下記）。
 
 **証明書**
 - Safari では証明書の警告を許可しても `wss://` には例外が効かないことがあるため、警告を許可するだけの運用には頼らない。
@@ -303,7 +313,7 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 
 ### 4.9 R7: 接続先SSIDの収集
 
-**目的**: 端末が想定外のネットワーク（ゲストWi-Fi、別のAP、テザリング等）に接続していることを早期に発見し、AP の分散状況（agents.md §5, §8）を把握する。
+**目的**: 稼働中に端末が別のネットワーク（ゲストWi-Fi、別のAP、テザリング等）へ切り替わったことを早期に発見し、AP の分散状況（agents.md §5, §8）を把握する。
 
 **取得方法（`devices/telemetry` + `devices/wifi_parse`）**
 
@@ -323,10 +333,14 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 - 映像の異常終了・切断の直後（原因の切り分け用）
 
 **判定と表示**
-- 設定の「想定SSID」（複数可）と比べて、一致しなければ **黄色の警告バッジ**。端末一覧に SSID / 帯域 / RSSI / BSSID の列を出す。
+- **SSID は任意**。どの SSID に接続していても動作する（想定SSIDの設定は持たない）。
+- **基準SSID**: 端末が CONNECTED になって最初に取得した SSID（Wi-Fi化の直前に取得した値があればそれ）を、その稼働中の基準とする。
+- **稼働中に SSID が基準と変わったら警告**: `SsidChanged`（旧→新、時刻）を発行し、端末一覧に **黄色の警告バッジ**と通知を出す。警告は管理者が「確認」するまで残し、確認した時点の SSID を新しい基準にする。SSID が取得できなくなった場合（Wi-Fi 切断・`<unknown ssid>`）は別の警告「Wi-Fi情報を取得できません」とする。
+- 端末ごとに SSID が異なること自体は警告にしない（教室によって複数の SSID を使う運用を許す）。集計画面で SSID ごとの台数を表示する。
+- 端末一覧に SSID / 帯域 / RSSI / BSSID の列を出す。
 - 2.4GHz 接続や RSSI が -70dBm 未満の端末には注意を表示する（帯域不足・切断の予兆）。
 - BSSID ごとの台数を集計して表示し、1台の AP に端末が偏っていないか確認できるようにする。
-- ホスト Mac の SSID との自動比較は行わない（macOS 14 以降は位置情報の権限なしに SSID を取得できない場合があるため）。想定SSIDは設定画面で入力する。
+- ホスト Mac の SSID との比較は行わない（macOS 14 以降は位置情報の権限なしに SSID を取得できない場合があるため）。
 
 **保存**
 - 最新値は台帳（`ssid`, `bssid`, `band`, `rssi`, `wifi_seen_at`）、変更は観測履歴に残す（`registry.observe(..., wifi=...)` 経由。SSID が変わったら `SsidChanged` を発行）。
@@ -346,7 +360,7 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 | GET/POST | `/api/registry/export.tsv` / `import` | TSV互換 | admin |
 | GET | `/api/network` | SSID・BSSID ごとの集計、警告一覧（R7） | admin |
 | GET | `/api/network/export.csv` | 端末ごとの Wi-Fi 情報の書き出し | admin |
-| PUT | `/api/settings/expected-ssids` | 想定SSIDの設定 | admin |
+| POST | `/api/network/warnings/{id}/ack` | SSID変更などの警告を確認済みにする（基準SSIDを更新） | admin |
 | POST | `/api/streams/{serial}/start` / `stop` | 映像の開始・停止 | admin |
 | POST / DELETE | `/api/recordings` `{serials:[...]\|"all", session}` | 録画の開始 / 停止 | admin |
 | POST | `/api/input/broadcast` `{serials, keycode\|tap%}` | 一括入力（R6） | admin |
@@ -511,9 +525,9 @@ questhub.command               # 起動用ラッパー（.mamba-env/bin/python -
 
 ## 10. 未決事項
 
-1. iPad のグリッドの既定fps（1 / 0.5 / 0.2）と、拡大の同時視聴の上限 — PoC の実測後に決める。
+1. ビューワーのグリッドの既定fps（1 / 0.5 / 0.2）と、拡大の同時視聴の上限 — M1（30台負荷検証）の実測後に決める。
 2. 録画の納品形式（MKV のままか、停止後に MP4 に変換するか、音声を AAC にするか）。
-3. iPadOS の最低バージョン（16.4以上を前提にしてよいか）。
-4. 想定SSIDの運用（教室ごとに切り替えるか、全教室共通の一覧か）。
+3. ビューワーの最低ブラウザバージョン（Chrome 94 / Safari・iPadOS 16.4 以上を前提にしてよいか）。
+4. ~~想定SSIDの運用~~ → 解決: SSID は任意、稼働中の変更を警告（2026-11-23）。
 5. リポジトリを公開するか（非開発者向けのワンライナー配布ができるかが決まる）。非公開なら、配布用の tarball を別途用意する方法を検討する。
 6. 対象 macOS の最低バージョン（13 Ventura 以上を想定）と、Intel Mac をサポートし続けるか。

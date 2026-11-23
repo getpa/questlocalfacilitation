@@ -9,7 +9,7 @@
 ## 0. 構成の全体像
 
 - **各 Quest 3**：Developer Mode ON → USB デバッグ常時許可 → 同一LAN（推奨：Wi-Fi 6 / 6E、5GHz以上）
-- **Mac**：Android Platform Tools (`adb`) と `scrcpy` を Homebrew で導入済み
+- **Mac**：`./install.sh` で `adb` と `scrcpy` をリポジトリ内に導入（Homebrew / conda 不要）
 - **初回接続**：USB → `adb tcpip 5555` → 端末IP固定 or DHCP予約 → 以後は Wi-Fi (`adb connect <IP>:5555`)
 - **同時表示**：本稿のエントリースクリプトで 1台=1ウィンドウを自動起動・整列。30台まで想定。
 - **録画**：同一スクリプトを `--record` モードで起動すると、台数分の MP4 を並列記録
@@ -27,13 +27,12 @@
 
 1. **Developer Mode ON**  
    スマホの Meta Quest アプリ → デバイス → 開発者モードを有効化。ヘッドセット側で「USB デバッグを常に許可」。
-2. **プロジェクト環境の構築（mamba）**  
+2. **プロジェクト環境の構築（`install.sh`）**  
    ```bash
-   mamba env create -p ./.mamba-env -f environment.yml
-   ./scripts/bootstrap_binaries.sh ./.mamba-env
-   conda activate "${PWD}/.mamba-env"
+   ./install.sh            # micromamba・Python環境・adb・scrcpy をリポジトリ内に導入（再実行可）
+   ./install.sh --doctor   # 環境チェック
    ```
-   `bootstrap_binaries.sh` が scrcpy / adb を環境内に設置します。
+   Mambaforge / Homebrew / Xcode CLT は不要です（`docs/GUI_DESIGN.md` §9）。スクリプトは `.mamba-env` を自動で使うため `conda activate` も不要です。
 3. **USB接続で Wi-Fi ADB を有効化**  
    ```bash
    adb devices                     # USB検出を確認
@@ -66,9 +65,8 @@ Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態
 `./scripts/discover_quest3.py` を使うと、Wi-Fi ADB (既定ポート5555) で待ち受けている Quest をスキャンできます。
 
 ```bash
-conda activate "${PWD}/.mamba-env"
-./scripts/discover_quest3.py --connect           # en0等から自動検出
-./scripts/discover_quest3.py --cidr 192.168.10.0/24
+./.mamba-env/bin/python scripts/discover_quest3.py --connect           # en0等から自動検出
+./.mamba-env/bin/python scripts/discover_quest3.py --cidr 192.168.10.0/24
 ```
 
 `--connect` を付けると `adb connect` でモデル/シリアルを取得し、`scripts/quest_devices.tsv` に貼り付け可能な行も出力されます。
@@ -117,7 +115,6 @@ Quest-30	192.168.10.50:5555
 `start` コマンドの実行中はステータスが背景監視され、接続切断でscrcpyが異常終了した端末は、端末ワーカーが `adb connect` と起動をやり直します。専用ウォッチのみ使いたい場合は `status` コマンドを利用すると、端末リストをクリア画面で数十秒ごとに更新します。既に接続済みなら `--skip-connect` を付けて再接続を抑止。ミラー中も毎回接続を確認したい場合は `start` 側で `--status-connect` を指定してください。
 
 ```bash
-conda activate "${PWD}/.mamba-env"
 ./scripts/quest_multi_scrcpy.sh status --interval 15       # 15秒刻みで更新
 ./scripts/quest_multi_scrcpy.sh status --skip-connect      # 既に接続済みの場合
 ```

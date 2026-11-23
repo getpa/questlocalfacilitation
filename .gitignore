@@ -35,3 +35,6 @@ screenshots/
 
 # Logs
 *.log
+
+# Installer (micromamba + package cache)
+.tools/

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub load test</title>
+<style>
+  :root { --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --line: #deded8; --bad: #c53030; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161615; --fg: #ececea; --muted: #a3a39d; --line: #3a3a37; --bad: #ff6b6b; } }
+  body { margin: 0; font: 12px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  #grid { display: grid; grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); gap: 4px; padding: 0 12px 12px; }
+  .tile { position: relative; background: #000; }
+  .tile canvas { display: block; width: 100%; aspect-ratio: 1280 / 684; }
+  .tile span { position: absolute; left: 4px; bottom: 2px; color: #fff; text-shadow: 0 0 2px #000; font-variant-numeric: tabular-nums; }
+  .tile.bad span { color: #ffb4b4; }
+</style>
+</head>
+<body>
+<header><strong>Load test</strong><span id="summary">starting…</span></header>
+<div id="grid"></div>
+<script type="module">
+import { StreamTile } from '/static/tile.js';
+
+const params = new URLSearchParams(location.search);
+const n = Number(params.get('n') || 30);
+const mode = params.get('mode') || 'full';
+const every = params.get('every') || '1';
+const cols = Number(params.get('cols') || Math.ceil(Math.sqrt(n * 16 / 9)));
+document.documentElement.style.setProperty('--cols', cols);
+
+const grid = document.getElementById('grid');
+const tiles = [];
+for (let i = 0; i < n; i++) {
+  const box = document.createElement('div');
+  box.className = 'tile';
+  const canvas = document.createElement('canvas');
+  const label = document.createElement('span');
+  box.append(canvas, label);
+  grid.append(box);
+  const tile = new StreamTile(canvas, `ws://${location.host}/ws/media/${i}?video=${mode}&every=${every}&audio=0`);
+  tile.label = label;
+  tile.box = box;
+  tile.start();
+  tiles.push(tile);
+}
+
+// Main-thread smoothness: requestAnimationFrame rate.
+let rafCount = 0, rafSince = performance.now();
+const raf = () => { rafCount++; requestAnimationFrame(raf); };
+requestAnimationFrame(raf);
+
+function summarize() {
+  const per = tiles.map((t) => t.summary());
+  const fps = per.map((s) => s.fps);
+  const lat = per.filter((s) => s.latencyAvgMs != null).map((s) => s.latencyAvgMs);
+  const seconds = (performance.now() - rafSince) / 1000;
+  return {
+    n, mode, every: Number(every), seconds,
+    rafFps: rafCount / seconds,
+    fpsAvg: fps.reduce((a, b) => a + b, 0) / n,
+    fpsMin: Math.min(...fps),
+    decoded: per.reduce((a, s) => a + s.decoded, 0),
+    dropped: per.reduce((a, s) => a + s.dropped, 0),
+    errors: per.reduce((a, s) => a + s.errors, 0),
+    lastError: per.find((s) => s.lastError)?.lastError ?? null,
+    maxQueue: Math.max(...per.map((s) => s.maxQueue)),
+    latencyAvgMs: lat.length ? lat.reduce((a, b) => a + b, 0) / lat.length : null,
+    latencyMaxMs: Math.max(...per.map((s) => s.latencyMaxMs)),
+    kbpsTotal: per.reduce((a, s) => a + s.kbps, 0),
+    codec: per[0]?.codec,
+    perTile: per,
+  };
+}
+
+window.qhLoad = {
+  summary: summarize,
+  reset() { tiles.forEach((t) => t.resetStats()); rafCount = 0; rafSince = performance.now(); },
+};
+
+setInterval(() => {
+  const s = summarize();
+  document.getElementById('summary').textContent =
+    `${n} tiles · ${mode} · ${s.fpsAvg.toFixed(1)} fps avg (min ${s.fpsMin.toFixed(1)}) · ` +
+    `rAF ${s.rafFps.toFixed(0)} · drop ${s.dropped} · err ${s.errors} · ` +
+    `latency ${s.latencyAvgMs?.toFixed(1) ?? '—'} ms · ${(s.kbpsTotal / 1000).toFixed(1)} Mbps`;
+  tiles.forEach((t, i) => {
+    const ps = s.perTile[i];
+    t.label.textContent = `#${i} ${ps.fps.toFixed(0)}fps`;
+    t.box.classList.toggle('bad', ps.errors > 0 || (mode === 'full' && ps.fps < 20));
+  });
+}, 1000);
+</script>
+</body>
+</html>

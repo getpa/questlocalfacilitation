@@ -184,6 +184,14 @@ A single-headset proof of concept for the upcoming GUI (`docs/GUI_DESIGN.md` §7
 
 Open the page in Chrome. Use "録画開始" to start or stop recording, "音声を再生" to play audio, and the display menu to switch to key-frame-only (low fps) mode.
 
+Load test (30 simulated headsets, optionally plus a real one; see `docs/GUI_DESIGN.md` §7.2):
+
+```bash
+./.mamba-env/bin/python tools/loadtest.py --devices 30 [--real <adb serial>]   # then open http://127.0.0.1:8790/?n=30&mode=full
+```
+
+Use `mode=keyframes` to test the low-fps viewer mode.
+
 Tests:
 
 ```bash

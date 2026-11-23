@@ -65,9 +65,12 @@ class StreamingService:
         sup.start()
         return sup
 
-    async def stop_stream(self, serial: str) -> None:
+    async def stop_stream(self, serial: str, force: bool = False) -> None:
+        """Stop one capture. Refused while it is being recorded (the file would end silently)."""
         sup = self.supervisors.get(serial)
         if sup:
+            if sup.locked_reason and not force:
+                raise RuntimeError(f"表示を止められません（{sup.locked_reason}）。先に録画を停止してください")
             await sup.stop()
 
     async def start_all(self) -> list[str]:
@@ -78,7 +81,10 @@ class StreamingService:
                 started.append(serial)
         return started
 
-    async def stop_all(self, suspend_auto: bool = False) -> None:
+    async def stop_all(self, suspend_auto: bool = False, force: bool = False) -> None:
+        locked = [s for s, sup in self.supervisors.items() if sup.locked_reason]
+        if locked and not force:
+            raise RuntimeError(f"録画中の端末が {len(locked)} 台あります。先に録画を停止してください")
         self.auto_suspended = self.auto_suspended or suspend_auto
         await asyncio.gather(*(s.stop() for s in self.supervisors.values()))
 
@@ -118,12 +124,17 @@ class StreamingService:
             await sup.pause()
         row = self.registry.get(serial) or {}
         options = sup.options if sup else self._options_for(serial)
-        proc = await asyncio.create_subprocess_exec(
-            paths.binary("scrcpy", "SCRCPY_BIN"), f"--serial={target}",
-            f"--window-title={row.get('alias') or serial} (Quest Hub)",
-            f"--max-size={options.max_size}", f"--max-fps={options.max_fps}",
-            f"--video-bit-rate={options.video_bit_rate}", "--no-audio", "--stay-awake",
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                paths.binary("scrcpy", "SCRCPY_BIN"), f"--serial={target}",
+                f"--window-title={row.get('alias') or serial} (Quest Hub)",
+                f"--max-size={options.max_size}", f"--max-fps={options.max_fps}",
+                f"--video-bit-rate={options.video_bit_rate}", "--no-audio", "--stay-awake",
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+        except Exception:
+            if sup:  # the window never opened: capture must not stay paused
+                sup.resume()
+            raise
         self._native[serial] = proc
 
         async def wait_exit():
@@ -143,7 +154,7 @@ class StreamingService:
         for proc in self._native.values():
             if proc.returncode is None:
                 proc.terminate()
-        await self.stop_all()
+        await self.stop_all(force=True)
         if self.settings.quest_tweaks:
             from questhub.devices import quest
             for serial in self.supervisors:

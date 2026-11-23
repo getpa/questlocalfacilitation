@@ -95,7 +95,10 @@ def create_admin_app(app: Application) -> FastAPI:
 
     @api.delete("/api/devices/{serial}")
     async def delete_device(serial: str):
-        await app.streaming.stop_stream(serial)
+        try:
+            await app.streaming.stop_stream(serial)
+        except RuntimeError as exc:
+            _err(exc)
         app.registry.delete(serial)
         app.manager.status.pop(serial, None)
         return {"ok": True}
@@ -109,7 +112,10 @@ def create_admin_app(app: Application) -> FastAPI:
 
     @api.post("/api/devices/{serial}/disconnect")
     async def disconnect(serial: str):
-        await app.streaming.stop_stream(serial)
+        try:
+            await app.streaming.stop_stream(serial)
+        except RuntimeError as exc:
+            _err(exc)
         await app.manager.disconnect(serial)
         return {"ok": True}
 
@@ -163,7 +169,10 @@ def create_admin_app(app: Application) -> FastAPI:
 
     @api.post("/api/streams/stop-all")
     async def stop_all():
-        await app.streaming.stop_all()
+        try:
+            await app.streaming.stop_all()
+        except RuntimeError as exc:
+            _err(exc)
         return {"ok": True}
 
     @api.post("/api/streams/quality-all")

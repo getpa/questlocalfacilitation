@@ -86,9 +86,13 @@ class RecordingService:
             raise RuntimeError("録画できる端末がありません（表示中の端末がない）")
         if self.session is None:
             stamp = datetime.now()
-            label = safe_name(name) if name else stamp.strftime("%Y%m%d-%H%M%S")
+            base = safe_name(name) if name else stamp.strftime("%Y%m%d-%H%M%S")
+            label, n = base, 1
+            while (self.root / label).exists():   # never reuse (and overwrite) an earlier session
+                n += 1
+                label = f"{base}_{n}"
             directory = self.root / label
-            directory.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(parents=True)
             self.session = {"name": label, "dir": str(directory), "started_at": time.time(),
                             "devices": {}, "stopped_at": None}
             self._disk_warned = False
@@ -99,7 +103,7 @@ class RecordingService:
             sup = self.streaming.supervisor(serial) or self.streaming.start_stream(serial)
             row = self.registry.get(serial) or {}
             alias = safe_name(row.get("alias") or serial)
-            path = Path(self.session["dir"]) / f"{alias}_{datetime.now():%Y%m%d-%H%M%S}.mkv"
+            path = self._unique_path(f"{alias}_{safe_name(serial)[-6:]}_{datetime.now():%Y%m%d-%H%M%S}")
             recorder = Recorder(path, sup.hub, audio=True)
             recorder.start()
             sup.locked_reason = LOCK_REASON
@@ -114,6 +118,16 @@ class RecordingService:
             started.append(serial)
         self._write_session()
         return {"session": self.session["name"], "started": started}
+
+    def _unique_path(self, stem: str) -> Path:
+        """Distinct file per recording even for equal aliases or restarts within a second."""
+        directory = Path(self.session["dir"])
+        taken = {str(r.path) for r in self.active.values()}
+        candidate, n = directory / f"{stem}.mkv", 1
+        while candidate.exists() or str(candidate) in taken:
+            n += 1
+            candidate = directory / f"{stem}-{n}.mkv"
+        return candidate
 
     async def stop(self, serials: list[str] | None = None, reason: str = "user") -> dict:
         targets = serials or list(self.active)

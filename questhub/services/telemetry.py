@@ -8,6 +8,7 @@ from questhub.core import events as ev
 from questhub.devices.manager import DeviceManager
 from questhub.devices.registry import Registry
 from questhub.devices.telemetry import read_battery, read_wifi
+from questhub.devices.wifi_parse import WifiInfo
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +56,12 @@ class TelemetryService:
             return
         battery = await read_battery(adb)
         wifi = await read_wifi(adb)
+        if battery is None and wifi is None:
+            return  # headset not answering at all: the connection manager reports that
+        if wifi is None:
+            # Reachable but no Wi-Fi information: clear the stale SSID and let the
+            # registry raise "Wi-Fi情報を取得できません".
+            wifi = WifiInfo(ssid=None)
         self.registry.observe(serial, "telemetry", wifi=wifi,
                               battery=battery.level if battery else None,
                               charging=battery.charging if battery else None)

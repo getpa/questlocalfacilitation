@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# quest_multi_scrcpy.sh — 最大30台の Quest 3 を scrcpy で同時起動/監視するエントリーポイント
+# quest_multi_scrcpy.sh — 最大50台の Quest 3 を scrcpy で同時起動/監視するエントリーポイント
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -21,6 +21,11 @@ start options:
   --no-audio            各ウィンドウで scrcpy 音声転送を無効化
   --audio-mode MODE     音声モード: dup | output | off (デフォルト: dup)
   --audio-fallback MODE dup 非対応時フォールバック: off | output (デフォルト: off)
+  --quality PRESET      キャプチャ品質: low | standard | high (デフォルト: standard)
+                        low      = 960px / 15fps / 1.5Mbps  （1台 約1.7Mbps、50台 約84Mbps）
+                        standard = 1280px / 30fps / 4Mbps   （1台 約4.3Mbps、50台 約213Mbps）
+                        high     = 1920px / 60fps / 10Mbps  （1台 約10.4Mbps、50台 約522Mbps）
+                        MAX_SIZE / MAX_FPS / BIT_RATE を指定した項目はプリセットより優先
   --dry-run             実行内容を表示するだけ（接続/起動はしない）
   --no-status           バッテリー監視を無効化
   --status-interval SEC  監視更新間隔（秒）
@@ -44,15 +49,16 @@ status options:
 
 Environment overrides (必要に応じて export してください):
   CONFIG             = ./scripts/quest_devices.tsv 以外の端末リスト
-  MAX_DEVICES        = 起動上限 (デフォルト: 30)
-  GRID_COLUMNS       = 自動配置時の列数 (デフォルト: 5)
-  GRID_ROWS          = 自動配置時の行数 (デフォルト: 6)
+  MAX_DEVICES        = 起動上限 (デフォルト: 50)
+  GRID_COLUMNS       = 自動配置時の列数 (デフォルト: 30台以下は5、31台以上は10)
+  GRID_ROWS          = 自動配置時の行数 (デフォルト: 30台以下は6、31台以上は台数/10の切り上げ)
   DISPLAY_WIDTH      = メイン表示領域の幅 px (デフォルト: 2560)
   DISPLAY_HEIGHT     = メイン表示領域の高さ px (デフォルト: 1440)
   WINDOW_MARGIN      = ウィンドウ間マージン px (デフォルト: 16)
-  BIT_RATE           = scrcpy ビットレート (デフォルト: 4M)
-  MAX_SIZE           = scrcpy 最大長辺 px (デフォルト: 1280)
-  MAX_FPS            = キャプチャの上限 fps (デフォルト: 30)
+  QUALITY            = キャプチャ品質プリセット (low | standard | high、デフォルト: standard)
+  BIT_RATE           = scrcpy ビットレート (デフォルト: プリセット値、standard は 4M)
+  MAX_SIZE           = scrcpy 最大長辺 px (デフォルト: プリセット値、standard は 1280)
+  MAX_FPS            = キャプチャの上限 fps (デフォルト: プリセット値、standard は 30)
   VIDEO_BUFFER       = 映像バッファ ms (デフォルト: 0、Wi-Fi揺らぎ対策: 50)
   SCRCPY_HWDEC       = デコード: auto | disabled | videotoolbox (デフォルト: auto)
   RECORD_DIR         = 録画ファイル保存先 (デフォルト: ./recordings)
@@ -164,6 +170,7 @@ SCRCPY_HWDEC=${SCRCPY_HWDEC:-auto}
 SCRCPY_HWDEC_ARGS=()
 SCRCPY_AUDIO_MODE=${SCRCPY_AUDIO_MODE:-dup}
 SCRCPY_AUDIO_FALLBACK=${SCRCPY_AUDIO_FALLBACK:-off}
+QUALITY=${QUALITY:-standard}
 
 if [[ -n ${SCRCPY_EXTRA_ARGS:-} ]]; then
   read -r -a SCRCPY_EXTRA_ARRAY <<<"${SCRCPY_EXTRA_ARGS}"
@@ -180,6 +187,29 @@ ensure_audio_mode() {
       exit 1
       ;;
   esac
+}
+
+ensure_quality() {
+  case "$1" in
+    low|standard|high) ;;
+    *)
+      log_error "Invalid quality preset: $1 (expected: low | standard | high)"
+      exit 1
+      ;;
+  esac
+}
+
+# Same values as questhub/stream/quality.py (peak Mbps per headset incl. audio + ~3% overhead).
+apply_quality_preset() {
+  local size fps rate
+  case "${QUALITY}" in
+    low) size=960; fps=15; rate=1500K ;;
+    standard) size=1280; fps=30; rate=4M ;;
+    high) size=1920; fps=60; rate=10M ;;
+  esac
+  MAX_SIZE=${MAX_SIZE:-${size}}
+  MAX_FPS=${MAX_FPS:-${fps}}
+  BIT_RATE=${BIT_RATE:-${rate}}
 }
 
 ensure_audio_fallback_mode() {
@@ -482,6 +512,16 @@ case "${ACTION:-}" in
           ensure_audio_fallback_mode "${value}"
           SCRCPY_AUDIO_FALLBACK="${value}"
           ;;
+        --quality)
+          shift || { log_error "Missing value for --quality"; exit 1; }
+          ensure_quality "$1"
+          QUALITY="$1"
+          ;;
+        --quality=*)
+          value=${1#*=}
+          ensure_quality "${value}"
+          QUALITY="${value}"
+          ;;
         --dry-run) DRY_RUN=true ;;
         --no-status) STATUS_ENABLED=false ;;
         --status-interval)
@@ -676,15 +716,20 @@ done
 COUNT=${#ALIASES[@]}
 
 if [[ ${ACTION} == "start" ]]; then
-  MAX_DEVICES=${MAX_DEVICES:-30}
+  MAX_DEVICES=${MAX_DEVICES:-50}
+  # Up to 30 headsets keep the classic 5x6 grid; larger rosters use 10 columns.
+  if [[ -z ${GRID_COLUMNS:-} && -z ${GRID_ROWS:-} ]] && (( COUNT > 30 )); then
+    GRID_COLUMNS=10
+    GRID_ROWS=$(( (COUNT + 9) / 10 ))
+  fi
   GRID_COLUMNS=${GRID_COLUMNS:-5}
   GRID_ROWS=${GRID_ROWS:-6}
   DISPLAY_WIDTH=${DISPLAY_WIDTH:-2560}
   DISPLAY_HEIGHT=${DISPLAY_HEIGHT:-1440}
   WINDOW_MARGIN=${WINDOW_MARGIN:-16}
-  BIT_RATE=${BIT_RATE:-4M}
-  MAX_SIZE=${MAX_SIZE:-1280}
-  MAX_FPS=${MAX_FPS:-30}
+  ensure_quality "${QUALITY}"
+  apply_quality_preset
+  log_info "Capture quality: ${QUALITY} (max ${MAX_SIZE}px, ${MAX_FPS}fps, ${BIT_RATE}bps)"
   VIDEO_BUFFER=${VIDEO_BUFFER:-0}
   ensure_positive_integer "${MAX_SIZE}"
   ensure_positive_integer "${MAX_FPS}"
@@ -702,6 +747,9 @@ if [[ ${ACTION} == "start" ]]; then
     log_error "GRID_COLUMNS and GRID_ROWS must be positive."
     exit 1
   }
+  if (( COUNT > GRID_COLUMNS * GRID_ROWS )); then
+    log_warn "${COUNT} devices exceed the ${GRID_COLUMNS}x${GRID_ROWS} grid; extra windows are placed below it"
+  fi
 
   WINDOW_WIDTH=$(( (DISPLAY_WIDTH - (GRID_COLUMNS - 1) * WINDOW_MARGIN) / GRID_COLUMNS ))
   WINDOW_HEIGHT=$(( (DISPLAY_HEIGHT - (GRID_ROWS - 1) * WINDOW_MARGIN) / GRID_ROWS ))

@@ -6,6 +6,7 @@ A deliberately small stand-in for services/streaming + stream/supervisor
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -17,6 +18,7 @@ from questhub.devices.telemetry import read_wifi
 from questhub.devices.wifi_parse import WifiInfo
 from questhub.record.recorder import Recorder
 from questhub.stream.hub import FrameHub
+from questhub.stream.quality import PRESETS, get_preset
 from questhub.stream.scrcpy_server import ScrcpyServer, StreamOptions
 
 log = logging.getLogger(__name__)
@@ -44,6 +46,8 @@ class DeviceSession:
         self._server: ScrcpyServer | None = None
         self._task: asyncio.Task | None = None
         self._connected = asyncio.Event()
+        self._reconfigure = False
+        self._rate_base: tuple[float, int] | None = None  # (time, bytes) for the measured Mbps
 
     async def start(self, wait: float | None = 20.0) -> None:
         if self._task:
@@ -52,6 +56,7 @@ class DeviceSession:
             self.wifi = await read_wifi(self.adb)
         except Exception as exc:  # telemetry must never block streaming
             log.warning("wifi read failed: %s", exc)
+        self._rate_base = (time.monotonic(), 0)
         self._task = asyncio.create_task(self._supervise())
         if wait:
             await asyncio.wait_for(self._connected.wait(), wait)
@@ -75,6 +80,10 @@ class DeviceSession:
                 await server.stop()
                 raise
             except Exception as exc:
+                if self._reconfigure:  # deliberate restart with new options: no back-off
+                    self._reconfigure = False
+                    await server.stop()
+                    continue
                 self.state = "backoff"
                 self.error = f"{type(exc).__name__}: {exc}"
                 self.restarts += 1
@@ -86,6 +95,37 @@ class DeviceSession:
                         await Adb(binary=self.adb.binary).run("connect", self.serial, timeout=10, check=False)
                     except Exception as reconnect_error:
                         log.warning("adb connect %s failed: %s", self.serial, reconnect_error)
+
+    async def set_quality(self, name: str) -> dict:
+        """Switch capture quality; restarts the server on the device (~1 s gap)."""
+        preset = get_preset(name)
+        if self.recorder and self.recorder.running:
+            raise RuntimeError("stop recording before changing quality")
+        self.options = dataclasses.replace(self.options, quality=preset.name, max_size=preset.max_size,
+                                           max_fps=preset.max_fps, video_bit_rate=preset.video_bit_rate)
+        self._rate_base = (time.monotonic(), self.hub.video_stats.bytes + self.hub.audio_stats.bytes)
+        if self._server and self.state == "streaming":
+            self._reconfigure = True
+            self.state = "reconfiguring"
+            await self._server.stop()
+        return self.quality_status()
+
+    def _measured_mbps(self, now: float) -> float | None:
+        """Average video+audio payload rate since start or the last quality change."""
+        if not self._rate_base:
+            return None
+        since, base = self._rate_base
+        total = self.hub.video_stats.bytes + self.hub.audio_stats.bytes - base
+        return round(total * 8 / 1e6 / max(now - since, 0.1), 2)
+
+    def quality_status(self) -> dict:
+        return {
+            "current": self.options.quality,
+            "max_size": self.options.max_size,
+            "max_fps": self.options.max_fps,
+            "video_bit_rate": self.options.video_bit_rate,
+            "presets": [p.to_dict() for p in PRESETS.values()],
+        }
 
     async def request_key_frame(self) -> None:
         if self._server and self.state == "streaming":
@@ -138,6 +178,8 @@ class DeviceSession:
                 "packets": audio.packets,
                 "bytes": audio.bytes,
             },
+            "quality": self.options.quality,
+            "mbps_in": self._measured_mbps(now),
             "viewers": self.hub.subscriber_count - (1 if self.recorder else 0),
             "recording": self.recorder.stats.__dict__ if self.recorder else None,
             "last_recording": self.last_recording,

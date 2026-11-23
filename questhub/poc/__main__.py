@@ -33,9 +33,11 @@ def parse_args(argv=None):
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--record-dir", default="recordings/poc")
     parser.add_argument("--record-seconds", type=float, help="record for N seconds without the web UI, then exit")
-    parser.add_argument("--max-size", type=int, default=1280)
-    parser.add_argument("--max-fps", type=int, default=30)
-    parser.add_argument("--bit-rate", type=int, default=4_000_000)
+    parser.add_argument("--quality", choices=["low", "standard", "high"], default="standard",
+                        help="capture preset (see questhub/stream/quality.py); the flags below override it")
+    parser.add_argument("--max-size", type=int)
+    parser.add_argument("--max-fps", type=int)
+    parser.add_argument("--bit-rate", type=int)
     parser.add_argument("--key-interval", type=float, default=1.0, help="requested key frame interval (s)")
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("--no-audio-dup", action="store_true", help="capture output instead of duplicating playback")
@@ -61,9 +63,9 @@ def main(argv=None) -> int:
     from questhub.poc.session import DeviceSession
 
     serial = args.serial or asyncio.run(first_device())
-    options = StreamOptions(max_size=args.max_size, max_fps=args.max_fps, video_bit_rate=args.bit_rate,
-                            key_frame_interval=args.key_interval, audio=not args.no_audio,
-                            audio_dup=not args.no_audio_dup)
+    options = StreamOptions.from_preset(args.quality, max_size=args.max_size, max_fps=args.max_fps,
+                                        video_bit_rate=args.bit_rate, key_frame_interval=args.key_interval,
+                                        audio=not args.no_audio, audio_dup=not args.no_audio_dup)
     session = DeviceSession(serial, options, record_dir=args.record_dir)
 
     if args.record_seconds:

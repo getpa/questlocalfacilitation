@@ -122,6 +122,46 @@ if os.getenv('HOLD'):
         self.assertIn('--audio-dup', result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_quality_presets_and_overrides(self):
+        expected = {
+            'low': ['--max-size=960', '--max-fps=15', '--video-bit-rate=1500K'],
+            'standard': ['--max-size=1280', '--max-fps=30', '--video-bit-rate=4M'],
+            'high': ['--max-size=1920', '--max-fps=60', '--video-bit-rate=10M'],
+        }
+        for name, flags in expected.items():
+            result = self.run_launcher('--dry-run', '--quality', name)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for flag in flags:
+                self.assertIn(flag, result.stderr, name)
+        result = self.run_launcher('--dry-run', MAX_FPS='24', QUALITY='high')
+        self.assertIn('--max-fps=24', result.stderr)
+        self.assertIn('--video-bit-rate=10M', result.stderr)
+        result = self.run_launcher('--dry-run', '--quality', 'ultra')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid quality preset', result.stderr)
+
+    def test_fifty_device_roster_uses_ten_column_grid(self):
+        rows = [f'Quest-{i:02d}\t192.0.2.{i}:5555' for i in range(1, 51)]
+        self.config.write_text('\n'.join(rows) + '\n')
+        result = self.run_launcher('--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # 2560x1440 split into 10x5 with 16 px margins -> 241x275 windows.
+        self.assertIn('--window-width=241', result.stderr)
+        self.assertIn('--window-height=275', result.stderr)
+        self.assertIn('Quest-50 (192.0.2.50:5555) at x=2313, y=1164', result.stdout)
+        self.assertNotIn('exceed the', result.stderr)
+
+        self.config.write_text('\n'.join(rows + ['Quest-51\t192.0.2.51:5555']) + '\n')
+        result = self.run_launcher('--dry-run')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('exceeds MAX_DEVICES=50', result.stderr)
+
+    def test_thirty_devices_keep_classic_grid(self):
+        self.config.write_text(''.join(f'Q{i}\t192.0.2.{i}:5555\n' for i in range(1, 31)))
+        result = self.run_launcher('--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--window-width=499', result.stderr)
+
     def test_old_scrcpy_and_audio_fallback(self):
         result = self.run_launcher('--no-status', OLD_SCRCPY='1', FAKE_SDK='32')
         self.assertEqual(result.returncode, 0, result.stderr)

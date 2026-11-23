@@ -4,8 +4,26 @@
     {
       "name": "questhub-poc",
       "runtimeExecutable": "./.mamba-env/bin/python",
-      "runtimeArgs": ["-m", "questhub.poc", "--port", "8765", "-v"],
+      "runtimeArgs": [
+        "-m",
+        "questhub.poc",
+        "--port",
+        "8765",
+        "-v"
+      ],
       "port": 8765
+    },
+    {
+      "name": "questhub-loadtest",
+      "runtimeExecutable": "./.mamba-env/bin/python",
+      "runtimeArgs": [
+        "tools/loadtest.py",
+        "--devices",
+        "50",
+        "--port",
+        "8790"
+      ],
+      "port": 8790
     }
   ]
 }

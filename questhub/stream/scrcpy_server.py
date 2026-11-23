@@ -13,10 +13,12 @@ import logging
 import random
 import socket
 import time
+from typing import Optional, Union
 
 from questhub import paths
 from questhub.adb.client import Adb
 from questhub.stream import protocol
+from questhub.stream.quality import DEFAULT_PRESET, get_preset
 from questhub.stream.protocol import MediaPacket, ProtocolError, SessionPacket, StreamDisabled
 
 log = logging.getLogger(__name__)
@@ -24,12 +26,14 @@ log = logging.getLogger(__name__)
 SERVER_VERSION = "5.0.1"
 REMOTE_JAR = "/data/local/tmp/scrcpy-server.jar"
 
-VideoHandler = Callable[[SessionPacket | MediaPacket], Awaitable[None] | None]
-AudioHandler = Callable[[MediaPacket], Awaitable[None] | None]
+# typing.Union keeps these runtime aliases importable on Python < 3.10.
+VideoHandler = Callable[[Union[SessionPacket, MediaPacket]], Optional[Awaitable[None]]]
+AudioHandler = Callable[[MediaPacket], Optional[Awaitable[None]]]
 
 
 @dataclass
 class StreamOptions:
+    quality: str = DEFAULT_PRESET  # name of the preset the values came from ("custom" if edited)
     max_size: int = 1280
     max_fps: int = 30
     video_bit_rate: int = 4_000_000
@@ -38,6 +42,17 @@ class StreamOptions:
     audio_dup: bool = True
     control: bool = True
     extra: dict[str, str] = field(default_factory=dict)
+
+    @classmethod
+    def from_preset(cls, name: str, **overrides) -> "StreamOptions":
+        preset = get_preset(name)
+        values = {"quality": preset.name, "max_size": preset.max_size, "max_fps": preset.max_fps,
+                  "video_bit_rate": preset.video_bit_rate}
+        changed = {k: v for k, v in overrides.items() if v is not None}
+        if any(k in changed and changed[k] != values[k] for k in ("max_size", "max_fps", "video_bit_rate")):
+            values["quality"] = "custom"
+        values.update(changed)
+        return cls(**values)
 
     def server_args(self, scid: int) -> list[str]:
         args = {

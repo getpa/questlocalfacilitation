@@ -95,6 +95,19 @@ def create_app(session: DeviceSession, start_session: bool = True) -> FastAPI:
             raise HTTPException(409, "not recording")
         return stats
 
+    @app.get("/api/quality")
+    async def quality():
+        return session.quality_status()
+
+    @app.post("/api/quality")
+    async def set_quality(body: dict):
+        try:
+            return await session.set_quality(str(body.get("preset", "")))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        except RuntimeError as exc:
+            raise HTTPException(409, str(exc)) from None
+
     @app.post("/api/keyframe")
     async def keyframe():
         await session.request_key_frame()

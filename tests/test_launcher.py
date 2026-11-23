@@ -122,6 +122,28 @@ if os.getenv('HOLD'):
         self.assertIn('--audio-dup', result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_fifty_device_roster_uses_ten_column_grid(self):
+        rows = [f'Quest-{i:02d}\t192.0.2.{i}:5555' for i in range(1, 51)]
+        self.config.write_text('\n'.join(rows) + '\n')
+        result = self.run_launcher('--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # 2560x1440 split into 10x5 with 16 px margins -> 241x275 windows.
+        self.assertIn('--window-width=241', result.stderr)
+        self.assertIn('--window-height=275', result.stderr)
+        self.assertIn('Quest-50 (192.0.2.50:5555) at x=2313, y=1164', result.stdout)
+        self.assertNotIn('exceed the', result.stderr)
+
+        self.config.write_text('\n'.join(rows + ['Quest-51\t192.0.2.51:5555']) + '\n')
+        result = self.run_launcher('--dry-run')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('exceeds MAX_DEVICES=50', result.stderr)
+
+    def test_thirty_devices_keep_classic_grid(self):
+        self.config.write_text(''.join(f'Q{i}\t192.0.2.{i}:5555\n' for i in range(1, 31)))
+        result = self.run_launcher('--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--window-width=499', result.stderr)
+
     def test_old_scrcpy_and_audio_fallback(self):
         result = self.run_launcher('--no-status', OLD_SCRCPY='1', FAKE_SDK='32')
         self.assertEqual(result.returncode, 0, result.stderr)

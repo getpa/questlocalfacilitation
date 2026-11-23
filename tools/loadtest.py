@@ -186,7 +186,7 @@ class RealDevice:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--devices", type=int, default=30)
+    parser.add_argument("--devices", type=int, default=50)
     parser.add_argument("--port", type=int, default=8790)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=684)

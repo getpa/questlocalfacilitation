@@ -19,7 +19,7 @@
       "runtimeArgs": [
         "tools/loadtest.py",
         "--devices",
-        "30",
+        "50",
         "--port",
         "8790"
       ],

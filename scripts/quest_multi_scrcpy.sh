@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# quest_multi_scrcpy.sh — 最大30台の Quest 3 を scrcpy で同時起動/監視するエントリーポイント
+# quest_multi_scrcpy.sh — 最大50台の Quest 3 を scrcpy で同時起動/監視するエントリーポイント
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -44,9 +44,9 @@ status options:
 
 Environment overrides (必要に応じて export してください):
   CONFIG             = ./scripts/quest_devices.tsv 以外の端末リスト
-  MAX_DEVICES        = 起動上限 (デフォルト: 30)
-  GRID_COLUMNS       = 自動配置時の列数 (デフォルト: 5)
-  GRID_ROWS          = 自動配置時の行数 (デフォルト: 6)
+  MAX_DEVICES        = 起動上限 (デフォルト: 50)
+  GRID_COLUMNS       = 自動配置時の列数 (デフォルト: 30台以下は5、31台以上は10)
+  GRID_ROWS          = 自動配置時の行数 (デフォルト: 30台以下は6、31台以上は台数/10の切り上げ)
   DISPLAY_WIDTH      = メイン表示領域の幅 px (デフォルト: 2560)
   DISPLAY_HEIGHT     = メイン表示領域の高さ px (デフォルト: 1440)
   WINDOW_MARGIN      = ウィンドウ間マージン px (デフォルト: 16)
@@ -676,7 +676,12 @@ done
 COUNT=${#ALIASES[@]}
 
 if [[ ${ACTION} == "start" ]]; then
-  MAX_DEVICES=${MAX_DEVICES:-30}
+  MAX_DEVICES=${MAX_DEVICES:-50}
+  # Up to 30 headsets keep the classic 5x6 grid; larger rosters use 10 columns.
+  if [[ -z ${GRID_COLUMNS:-} && -z ${GRID_ROWS:-} ]] && (( COUNT > 30 )); then
+    GRID_COLUMNS=10
+    GRID_ROWS=$(( (COUNT + 9) / 10 ))
+  fi
   GRID_COLUMNS=${GRID_COLUMNS:-5}
   GRID_ROWS=${GRID_ROWS:-6}
   DISPLAY_WIDTH=${DISPLAY_WIDTH:-2560}
@@ -702,6 +707,9 @@ if [[ ${ACTION} == "start" ]]; then
     log_error "GRID_COLUMNS and GRID_ROWS must be positive."
     exit 1
   }
+  if (( COUNT > GRID_COLUMNS * GRID_ROWS )); then
+    log_warn "${COUNT} devices exceed the ${GRID_COLUMNS}x${GRID_ROWS} grid; extra windows are placed below it"
+  fi
 
   WINDOW_WIDTH=$(( (DISPLAY_WIDTH - (GRID_COLUMNS - 1) * WINDOW_MARGIN) / GRID_COLUMNS ))
   WINDOW_HEIGHT=$(( (DISPLAY_HEIGHT - (GRID_ROWS - 1) * WINDOW_MARGIN) / GRID_ROWS ))

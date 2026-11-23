@@ -1,6 +1,6 @@
 # Quest Local Facilitation
 
-Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrcpy and adb from a macOS host.
+Toolkit for mirroring up to 50 Meta Quest 3 headsets over local Wi-Fi using scrcpy and adb from a macOS host.
 
 ## Prerequisites
 - macOS 13 (Ventura) or later, Apple Silicon or Intel
@@ -71,7 +71,7 @@ scrcpy --version
 2. Run `./scripts/restart_env_adb.sh` first.
 3. (Optional) With devices still tethered over USB, run `./scripts/usb_to_tcp.sh --port 5555` to switch every detected headset into Wi-Fi ADB mode.
    - `usb_to_tcp.sh` also runs `./scripts/restart_env_adb.sh` automatically at startup to enforce the same adb-daemon reset sequence.
-4. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 30 entries).
+4. Populate `scripts/quest_devices.tsv` with aliases, IPs, and optional grid positions (up to 50 entries; `MAX_DEVICES` raises the limit).
 5. Mirror the same endpoints in `scripts/devices.env` if you plan to use the broadcast-input helper scripts.
 
 
@@ -120,7 +120,7 @@ Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` 
 
 ### Quest 3 performance settings
 
-The default monitoring stream is limited to **1280px / 30fps / 4Mbps** per headset (previously 1600px / uncapped fps / 10Mbps). This reduces capture, decoding and Wi-Fi load for multi-headset grids; it trades fine detail and frame rate for capacity. Thirty 4Mbps video streams target roughly 120Mbps before audio and protocol overhead, so usable capacity still depends on the access point and Mac.
+The default monitoring stream is limited to **1280px / 30fps / 4Mbps** per headset (previously 1600px / uncapped fps / 10Mbps). This reduces capture, decoding and Wi-Fi load for multi-headset grids; it trades fine detail and frame rate for capacity. Fifty 4Mbps video streams target roughly 200Mbps before audio and protocol overhead, so usable capacity still depends on the access points and Mac; connect the Mac to the network by Ethernet for large rosters. With more than 30 headsets the default window grid switches from 5×6 to 10 columns (10×5 for 50).
 
 Scrcpy 5.0.1 defaults to hardware decoding when available. The launcher uses `--hwdec=auto`, allowing VideoToolbox on macOS with software fallback. Older scrcpy versions remain usable with a warning, without the new flag. Keep the default H.264 codec for low latency; no crop or capture filters are added. Actual throughput and Horizon OS capture behavior must be checked on your headsets.
 
@@ -184,10 +184,10 @@ A single-headset proof of concept for the upcoming GUI (`docs/GUI_DESIGN.md` §7
 
 Open the page in Chrome. Use "録画開始" to start or stop recording, "音声を再生" to play audio, and the display menu to switch to key-frame-only (low fps) mode.
 
-Load test (30 simulated headsets, optionally plus a real one; see `docs/GUI_DESIGN.md` §7.2):
+Load test (50 simulated headsets by default, optionally plus a real one; see `docs/GUI_DESIGN.md` §7.2):
 
 ```bash
-./.mamba-env/bin/python tools/loadtest.py --devices 30 [--real <adb serial>]   # then open http://127.0.0.1:8790/?n=30&mode=full
+./.mamba-env/bin/python tools/loadtest.py --devices 50 [--real <adb serial>]   # then open http://127.0.0.1:8790/?n=50&mode=full
 ```
 
 Use `mode=keyframes` to test the low-fps viewer mode.

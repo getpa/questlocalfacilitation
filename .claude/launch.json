@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "questhub-poc",
+      "runtimeExecutable": "./.mamba-env/bin/python",
+      "runtimeArgs": ["-m", "questhub.poc", "--port", "8765", "-v"],
+      "port": 8765
+    }
+  ]
+}

@@ -3,35 +3,41 @@
 Toolkit for mirroring up to 30 Meta Quest 3 headsets over local Wi-Fi using scrcpy and adb from a macOS host.
 
 ## Prerequisites
-- macOS (Apple Silicon or Intel)
-- [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge) or another conda-compatible installation that bundles `mamba`
+- macOS 13 (Ventura) or later, Apple Silicon or Intel
+- Google Chrome (for the upcoming Quest Hub GUI)
 - USB access to each Quest for the initial developer-mode pairing
 
-## Host Requirements
-- Xcode Command Line Tools (install with `xcode-select --install` if they are not already present).
-- All other build-time dependencies (Meson, Ninja, pkg-config, SDL3, FFmpeg, libusb, OpenJDK 17, git, etc.) are provided inside the project conda environment and do not need separate Homebrew installs.
+Nothing else is required: no Mambaforge/conda, Homebrew, or Xcode Command Line Tools. The installer downloads a pinned, checksum-verified [micromamba](https://github.com/mamba-org/micromamba-releases) into `.tools/` and builds the environment in `.mamba-env/`, entirely inside this repository (no sudo, no changes to your shell profile).
 
-> The bootstrap script installs the official `scrcpy` **v5.0.1** client and its matching bundled server. The old experimental server override is no longer used. Official 5.0.1 archives are checked against the published SHA-256 checksums, and an overwritten cached 5.0.1 server is repaired on the next bootstrap run. For other release versions, `SCRCPY_ARCHIVE_SHA256` can supply the archive checksum. Optional source builds use `SCRCPY_BUILD_FROM_GIT=1` and default to the same official tag; custom repositories/refs can be selected with `SCRCPY_GIT_REPO` / `SCRCPY_GIT_REF`.
+> The bootstrap installs the official `scrcpy` **v5.0.1** client and its matching bundled server, checked against the published SHA-256 checksums. Building scrcpy from source is optional (`./install.sh --build-from-source`, which adds `environment-build.yml` and needs Xcode Command Line Tools); custom repositories/refs can be selected with `SCRCPY_GIT_REPO` / `SCRCPY_GIT_REF`.
 
 ## Set Up the Environment
-Create the project-local environment and install the required binaries into it:
+
+```bash
+./install.sh            # first install, or update after pulling changes (idempotent)
+./install.sh --doctor   # check python / adb / scrcpy 5.0.1 / Chrome / ports
+```
+
+| Option | Purpose |
+|--------|---------|
+| `--strict` | Install only from `locks/conda-<platform>.txt` and a pinned platform-tools archive (identical classroom Macs) |
+| `--build-from-source` | Also install build tools and compile scrcpy from git |
+| `--relock [osx-arm64\|osx-64]` | Re-solve `environment.yml` and rewrite the lock file (maintainers) |
+| `--uninstall [--purge-data] --yes` | Remove `.tools/` and `.mamba-env/` (and `~/.questhub` with `--purge-data`) |
+
+On macOS 15 or later, the first `adb connect` to a headset triggers the "Local Network" permission prompt for your terminal app. If it was denied, `adb connect` fails with `No route to host`; allow it in System Settings > Privacy & Security > Local Network.
+
+If you already use Mambaforge, the manual route still works:
 
 ```bash
 mamba env create -p ./.mamba-env -f environment.yml
 ./scripts/bootstrap_binaries.sh ./.mamba-env
 ```
 
-If the environment already exists, refresh it instead of recreating:
+Scripts in this repository find `.mamba-env` automatically, so no activation is needed. To call `adb` / `scrcpy` directly from your shell:
 
 ```bash
-mamba env update -p ./.mamba-env -f environment.yml
-./scripts/bootstrap_binaries.sh ./.mamba-env
-```
-
-Activate it when working in the repo:
-
-```bash
-conda activate "${PWD}/.mamba-env"
+export PATH="${PWD}/.mamba-env/bin:${PATH}"
 ```
 
 Before running any script in this repository, restart the adb daemon with the repo-local binary:
@@ -49,7 +55,7 @@ The environment installs:
 - Python runtime and `requests`
 - Latest Android platform tools (`adb`, `fastboot`) and scrcpy binaries via `bootstrap_binaries.sh`
 
-All helper scripts in `scripts/` automatically prefer binaries inside this environment (falling back to `PATH` only if necessary), so you can run them without fully activating the env—though activation is still recommended for convenience.
+All helper scripts in `scripts/` automatically prefer binaries inside this environment (falling back to `PATH` only if necessary), so you can run them without activating anything. Run Python helpers with `./.mamba-env/bin/python` (on a Mac without Command Line Tools, a bare `python3` only opens the CLT install dialog).
 
 Verify the binaries inside the environment:
 
@@ -91,15 +97,14 @@ Use `--ping` for network reachability, `--adb` to verify ADB state, or both for 
 Use the bundled scanner to probe your LAN for Quest headsets listening on Wi-Fi ADB (port 5555 by default):
 
 ```bash
-conda activate "${PWD}/.mamba-env"
-./scripts/discover_quest3.py          # auto-detect primary network
-./scripts/discover_quest3.py --cidr 192.168.10.0/24 --connect
+./.mamba-env/bin/python scripts/discover_quest3.py          # auto-detect primary network
+./.mamba-env/bin/python scripts/discover_quest3.py --cidr 192.168.10.0/24 --connect
 ```
 
 Pass `--connect` to run `adb connect` and collect model/serial metadata for each hit. The script also prints ready-to-paste rows for `scripts/quest_devices.tsv`.
 
 ## Running the Multi-Scrcpy Launcher
-Activate the environment, then run:
+Run:
 
 ```bash
 ./scripts/quest_multi_scrcpy.sh start                 # mirror + periodic battery table
@@ -167,21 +172,38 @@ Use `scripts/quest_os_tweaks.sh engage` / `restore` outside the launcher when yo
 
 If flicker appears when the controller laser hovers Meta UI elements, keep cropping/angle flags disabled and restart the affected session. Automatic recovery handles process/connection failures; it cannot detect flicker or a frozen image while scrcpy is still running.
 
-## Updating Dependencies
-To refresh conda packages (CLI tooling) and re-fetch binaries:
+## Quest Hub PoC (GUI preview)
+
+A single-headset proof of concept for the upcoming GUI (`docs/GUI_DESIGN.md` §7.1). It talks to the official scrcpy 5.0.1 server directly, shows the stream in the browser (WebCodecs), plays audio, and records Matroska (H.264 + Opus) without re-encoding.
 
 ```bash
-conda activate "${PWD}/.mamba-env"
-mamba update --all
-./scripts/bootstrap_binaries.sh "${PWD}/.mamba-env"
+./.mamba-env/bin/python -m questhub.poc                                  # first adb device -> http://127.0.0.1:8765
+./.mamba-env/bin/python -m questhub.poc --serial 192.168.22.201:5555
+./.mamba-env/bin/python -m questhub.poc --record-seconds 10                # headless recording into recordings/poc/
+```
+
+Open the page in Chrome. Use "録画開始" to start or stop recording, "音声を再生" to play audio, and the display menu to switch to key-frame-only (low fps) mode.
+
+Tests:
+
+```bash
+./.mamba-env/bin/python -m unittest discover -s tests -v                    # offline, includes the media pipeline
+QH_TEST_DEVICE=<adb serial> ./.mamba-env/bin/python -m unittest tests.test_poc_device -v   # real headset
+```
+
+## Updating Dependencies
+Edit `environment.yml`, then regenerate both lock files and reinstall:
+
+```bash
+./install.sh --relock osx-arm64
+./install.sh --relock osx-64
+./install.sh
 ```
 
 ## Cleaning Up
-If you need to remove the environment entirely:
 
 ```bash
-conda deactivate
-rm -rf .mamba-env
+./install.sh --uninstall --yes
 ```
 
 ## Additional Resources

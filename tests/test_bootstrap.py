@@ -79,6 +79,26 @@ shutil.copyfile(os.environ['FIXTURE_ARCHIVE'], args[args.index('-o') + 1])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.prefix / 'bin/scrcpy-server').read_text(), 'matching release server')
 
+    def test_release_install_needs_no_java_or_python(self):
+        # Bare macOS: java is absent and python3 is only a CLT shim.
+        (self.prefix / 'bin/java').unlink()
+        shim_dir = self.dir / 'shims'
+        shim_dir.mkdir()
+        self.executable(shim_dir / 'python3', '#!/bin/sh\necho shim >&2\nexit 1\n')
+        env = dict(self.env, PATH=f"{shim_dir}:{os.environ['PATH']}")
+        env.pop('JAVA_HOME')
+        result = subprocess.run(['/bin/bash', str(ROOT / 'scripts/bootstrap_binaries.sh'), str(self.prefix)],
+                                env=env, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('shim', result.stderr)
+
+    def test_platform_tools_checksum_pin(self):
+        import shutil
+        shutil.rmtree(self.prefix / 'vendor/platform-tools')
+        result = self.run_bootstrap(PLATFORM_TOOLS_SHA256='0' * 64)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('platform-tools archive checksum mismatch', result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

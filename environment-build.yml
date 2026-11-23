@@ -1,0 +1,14 @@
+# Extra packages for building scrcpy from source
+# (./install.sh --build-from-source, or SCRCPY_BUILD_FROM_GIT=1).
+name: quest-mirror-build
+channels:
+  - conda-forge
+dependencies:
+  - git
+  - meson
+  - ninja
+  - pkg-config
+  - sdl3
+  - ffmpeg
+  - libusb
+  - openjdk=17

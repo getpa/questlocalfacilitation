@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# bootstrap_binaries.sh — Provision adb/platform-tools and build scrcpy into the active conda/mamba env
+# bootstrap_binaries.sh — Provision adb/platform-tools and scrcpy into the project conda/mamba env
 set -euo pipefail
 
 PLATFORM_TOOLS_URL=${PLATFORM_TOOLS_URL:-"https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"}
+# Optional pin (install.sh --strict sets a versioned URL and its checksum).
+PLATFORM_TOOLS_SHA256=${PLATFORM_TOOLS_SHA256:-}
 SCRCPY_VERSION=${SCRCPY_VERSION:-"5.0.1"}
 SCRCPY_BASE_URL=${SCRCPY_BASE_URL:-"https://github.com/Genymobile/scrcpy/releases/download"}
 # Use matching official client/server releases; source builds are opt-in.
@@ -33,42 +35,45 @@ if [[ -z "${prefix}" ]]; then
   exit 1
 fi
 
-prefix="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "${prefix}")"
-
 if [[ ! -d "${prefix}" ]]; then
   echo "[!] Prefix not found: ${prefix}" >&2
   exit 1
 fi
+# Resolve without python3/realpath: on a bare macOS those are Command Line Tools shims.
+prefix="$(cd "${prefix}" && pwd -P)"
 
 # ensure the virtual environment bin directory is preferred
 export PATH="${prefix}/bin:${PATH}"
 export CONDA_PREFIX="${prefix}"
 
-command -v git >/dev/null 2>&1 || { echo "[!] git is required." >&2; exit 1; }
+# git and a JDK are needed only for source builds (environment-build.yml).
+ensure_build_toolchain() {
+  command -v git >/dev/null 2>&1 || { echo "[!] git is required to build scrcpy from source (install environment-build.yml)." >&2; exit 1; }
 
-JAVA_BIN=""
-if [[ -x "${prefix}/bin/java" ]]; then
-  JAVA_BIN="${prefix}/bin/java"
-elif [[ -x "${prefix}/lib/jvm/bin/java" ]]; then
-  JAVA_BIN="${prefix}/lib/jvm/bin/java"
-elif JAVA_BIN=$(command -v java 2>/dev/null); then
-  :
-fi
-
-[[ -n ${JAVA_BIN:-} ]] || { echo "[!] java not found. Install a JDK (e.g. openjdk@17) inside the environment." >&2; exit 1; }
-
-if [[ -z ${JAVA_HOME:-} ]]; then
-  JAVA_HOME=$("${JAVA_BIN}" -XshowSettings:properties -version 2>&1 | awk -F' = ' '/\bjava.home\b/ {print $2; exit}')
-  JAVA_HOME=$(printf '%s' "${JAVA_HOME}" | sed 's/[[:space:]]*$//')
-  if [[ -z ${JAVA_HOME} ]]; then
-    JAVA_HOME=$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)
+  JAVA_BIN=""
+  if [[ -x "${prefix}/bin/java" ]]; then
+    JAVA_BIN="${prefix}/bin/java"
+  elif [[ -x "${prefix}/lib/jvm/bin/java" ]]; then
+    JAVA_BIN="${prefix}/lib/jvm/bin/java"
+  elif JAVA_BIN=$(command -v java 2>/dev/null); then
+    :
   fi
-  log INFO "JAVA_HOME not set, defaulting to ${JAVA_HOME}"
-fi
 
-export JAVA_HOME
-export PATH="${JAVA_HOME}/bin:${PATH}"
-log INFO "Using java binary: ${JAVA_BIN}"
+  [[ -n ${JAVA_BIN:-} ]] || { echo "[!] java not found. Install a JDK (e.g. openjdk=17 from environment-build.yml)." >&2; exit 1; }
+
+  if [[ -z ${JAVA_HOME:-} ]]; then
+    JAVA_HOME=$("${JAVA_BIN}" -XshowSettings:properties -version 2>&1 | awk -F' = ' '/\bjava.home\b/ {print $2; exit}')
+    JAVA_HOME=$(printf '%s' "${JAVA_HOME}" | sed 's/[[:space:]]*$//')
+    if [[ -z ${JAVA_HOME} ]]; then
+      JAVA_HOME=$(cd "$(dirname "${JAVA_BIN}")/.." && pwd)
+    fi
+    log INFO "JAVA_HOME not set, defaulting to ${JAVA_HOME}"
+  fi
+
+  export JAVA_HOME
+  export PATH="${JAVA_HOME}/bin:${PATH}"
+  log INFO "Using java binary: ${JAVA_BIN}"
+}
 
 bin_dir="${prefix}/bin"
 vendor_dir="${prefix}/vendor"
@@ -100,6 +105,11 @@ if [[ ! -x "${pt_dir}/adb" ]]; then
   tmp_dir=$(mktemp -d)
   zip_path="${tmp_dir}/platform-tools.zip"
   download "${PLATFORM_TOOLS_URL}" "${zip_path}"
+  if [[ -n ${PLATFORM_TOOLS_SHA256} && $(sha256_of_file "${zip_path}") != "${PLATFORM_TOOLS_SHA256}" ]]; then
+    rm -rf "${tmp_dir}"
+    log ERROR "platform-tools archive checksum mismatch"
+    exit 1
+  fi
   unzip -q "${zip_path}" -d "${tmp_dir}"
   rm -rf "${pt_dir}"
   mv "${tmp_dir}/platform-tools" "${pt_dir}"
@@ -293,6 +303,7 @@ sdk_env_exec() {
   fi
 }
 install_scrcpy_from_git() {
+  ensure_build_toolchain
   command -v meson >/dev/null 2>&1 || { echo "[!] meson is required to build scrcpy from source." >&2; exit 1; }
   command -v ninja >/dev/null 2>&1 || { echo "[!] ninja is required to build scrcpy from source." >&2; exit 1; }
 

@@ -15,8 +15,38 @@ jobs:
           python-version: '3.11'
       - name: Check shell syntax
         run: |
-          for script in scripts/*.sh runner.sh; do
+          for script in scripts/*.sh runner.sh install.sh questhub.command; do
             bash -n "$script"
+          done
+      - name: Check syntax with macOS bash 3.2
+        if: runner.os == 'macOS'
+        run: |
+          for script in install.sh questhub.command scripts/bootstrap_binaries.sh; do
+            /bin/bash -n "$script"
           done
       - name: Run offline regression tests
         run: python3 -m unittest discover -s tests -v
+
+  installer:
+    # Real installation on runners without conda (Apple Silicon and Intel).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hide preinstalled conda
+        run: |
+          echo "CONDA=" >> "$GITHUB_ENV"
+          echo "PATH=/usr/bin:/bin:/usr/sbin:/sbin" >> "$GITHUB_ENV"
+      - name: Install (strict, from lock)
+        run: /bin/bash ./install.sh --strict
+      - name: Rerun is a no-op
+        run: /bin/bash ./install.sh --strict | tee rerun.log && grep -q 'Environment is up to date' rerun.log
+      - name: Doctor
+        run: /bin/bash ./install.sh --doctor
+      - name: Offline tests with the project environment (PoC media pipeline)
+        run: ./.mamba-env/bin/python -m unittest discover -s tests -v
+      - name: Uninstall
+        run: /bin/bash ./install.sh --uninstall --yes && test ! -e .mamba-env && test ! -e .tools

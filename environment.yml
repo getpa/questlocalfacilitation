@@ -1,3 +1,5 @@
+# Runtime environment (installed by ./install.sh).
+# Source-build extras live in environment-build.yml.
 name: quest-mirror
 channels:
   - conda-forge
@@ -8,14 +10,11 @@ dependencies:
   - coreutils
   - curl
   - unzip
-  - git
-  - meson
-  - ninja
-  - pkg-config
-  - sdl3
-  - ffmpeg
-  - libusb
-  - openjdk=17
-  - pip
-  - pip:
-      - requests
+  - requests
+  # Quest Hub GUI (docs/GUI_DESIGN.md §9.7)
+  - av
+  - numpy
+  - fastapi
+  - uvicorn
+  - cryptography
+  - qrcode

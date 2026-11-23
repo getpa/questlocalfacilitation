@@ -118,15 +118,35 @@ Run:
 
 Environment variables such as `GRID_COLUMNS`, `DISPLAY_WIDTH`, and `RECORD_DIR` can be set inline to adjust window layout or recording targets. See `agents.md` for full documentation and best practices. Battery polling defaults to 60 s; tweak via `STATUS_INTERVAL` or `--status-interval`. Each headset has one background worker which retries `adb connect` and relaunches scrcpy after an abnormal exit. An offline headset does not block other launches; battery polling only reports status and never spawns additional workers. Set `SCRCPY_BASE_PORT` if you need to shift the local port range used by scrcpy when multiple windows start in parallel; each headset scans a separate 100-port range starting at `SCRCPY_BASE_PORT + index * 100`. Use `SCRCPY_LAUNCH_DELAY` (seconds) if you need extra spacing between launches. Audio mode defaults to `dup` (copy audio to Mac while keeping Quest playback) and falls back to `off` by default when duplication is unsupported (`--audio-fallback output` to keep host audio in that case). Use `--audio-mode output` if you explicitly want legacy full-forwarding behavior, or `--no-audio` to silence host capture. Launcher messages are prefixed with `[launcher]` to distinguish them from raw scrcpy/adb logs. Failed connections and abnormal scrcpy exits are retried after a 3-second pause, even with `--no-status`. Closing a scrcpy window normally ends that device’s worker. Individual scrcpy output lines are tagged with `[Alias]` so you can see which headset emitted a warning. Exiting the launcher (Ctrl+C) now shuts down all scrcpy/status subprocesses cleanly, closing every mirroring window.
 
+### Capture quality presets
+
+Choose one of three presets with `--quality` (CLI) or the 品質 menu in the PoC (`--quality` there too). The bandwidth is a planning estimate: the video bit-rate ceiling plus Opus audio (0.128 Mbps) plus about 3% protocol overhead. Busy scenes approach it; quiet VR menus use far less.
+
+| プリセット | 長辺 | fps | 映像ビットレート | 1台あたり（目安） | 10台 | 30台 | 50台 |
+|---|---|---|---|---|---|---|---|
+| `low` 低（省帯域） | 960px | 15 | 1.5 Mbps | 約1.68 Mbps | 16.8 Mbps | 50.4 Mbps | 84 Mbps |
+| `standard` 標準 | 1280px | 30 | 4 Mbps | 約4.25 Mbps | 42.5 Mbps | 127.5 Mbps | 212.5 Mbps |
+| `high` 高（詳細） | 1920px | 60 | 10 Mbps | 約10.43 Mbps | 104.3 Mbps | 312.9 Mbps | 521.5 Mbps |
+
+Measured on a Quest 3 showing a nearly static home screen (Wi-Fi 6E): `low` 0.31 Mbps (960×512, 15 fps), `standard` 0.63 Mbps (1280×684, 30 fps), `high` 1.76 Mbps (1920×1026, 60 fps). Switching presets in the PoC restarts the stream in about 0.8 s and is refused while recording.
+
+```bash
+./scripts/quest_multi_scrcpy.sh start --quality low          # 50 headsets on a shared network
+QUALITY=high ./scripts/quest_multi_scrcpy.sh start           # a few headsets in detail
+./.mamba-env/bin/python -m questhub.poc --quality high
+```
+
+`MAX_SIZE`, `MAX_FPS` and `BIT_RATE` still override individual values of the chosen preset.
+
 ### Quest 3 performance settings
 
-The default monitoring stream is limited to **1280px / 30fps / 4Mbps** per headset (previously 1600px / uncapped fps / 10Mbps). This reduces capture, decoding and Wi-Fi load for multi-headset grids; it trades fine detail and frame rate for capacity. Fifty 4Mbps video streams target roughly 200Mbps before audio and protocol overhead, so usable capacity still depends on the access points and Mac; connect the Mac to the network by Ethernet for large rosters. With more than 30 headsets the default window grid switches from 5×6 to 10 columns (10×5 for 50).
+The default (`standard`) monitoring stream is limited to **1280px / 30fps / 4Mbps** per headset (previously 1600px / uncapped fps / 10Mbps). This reduces capture, decoding and Wi-Fi load for multi-headset grids; it trades fine detail and frame rate for capacity. Fifty 4Mbps video streams target roughly 200Mbps before audio and protocol overhead, so usable capacity still depends on the access points and Mac; connect the Mac to the network by Ethernet for large rosters. With more than 30 headsets the default window grid switches from 5×6 to 10 columns (10×5 for 50).
 
 Scrcpy 5.0.1 defaults to hardware decoding when available. The launcher uses `--hwdec=auto`, allowing VideoToolbox on macOS with software fallback. Older scrcpy versions remain usable with a warning, without the new flag. Keep the default H.264 codec for low latency; no crop or capture filters are added. Actual throughput and Horizon OS capture behavior must be checked on your headsets.
 
 ```bash
 # Keep more detail / motion when mirroring fewer devices (also affects recordings).
-MAX_SIZE=1600 MAX_FPS=60 BIT_RATE=10M ./scripts/quest_multi_scrcpy.sh start
+./scripts/quest_multi_scrcpy.sh start --quality high
 
 # Add 50ms buffering to smooth Wi-Fi jitter; increases display latency.
 VIDEO_BUFFER=50 ./scripts/quest_multi_scrcpy.sh start

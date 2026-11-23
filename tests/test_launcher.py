@@ -122,6 +122,24 @@ if os.getenv('HOLD'):
         self.assertIn('--audio-dup', result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_quality_presets_and_overrides(self):
+        expected = {
+            'low': ['--max-size=960', '--max-fps=15', '--video-bit-rate=1500K'],
+            'standard': ['--max-size=1280', '--max-fps=30', '--video-bit-rate=4M'],
+            'high': ['--max-size=1920', '--max-fps=60', '--video-bit-rate=10M'],
+        }
+        for name, flags in expected.items():
+            result = self.run_launcher('--dry-run', '--quality', name)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for flag in flags:
+                self.assertIn(flag, result.stderr, name)
+        result = self.run_launcher('--dry-run', MAX_FPS='24', QUALITY='high')
+        self.assertIn('--max-fps=24', result.stderr)
+        self.assertIn('--video-bit-rate=10M', result.stderr)
+        result = self.run_launcher('--dry-run', '--quality', 'ultra')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Invalid quality preset', result.stderr)
+
     def test_fifty_device_roster_uses_ten_column_grid(self):
         rows = [f'Quest-{i:02d}\t192.0.2.{i}:5555' for i in range(1, 51)]
         self.config.write_text('\n'.join(rows) + '\n')

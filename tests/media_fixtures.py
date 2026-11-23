@@ -71,6 +71,12 @@ class FakeScrcpyServer:
             asyncio.create_task(self._serve())
 
     async def _serve(self):
+        try:
+            await self._serve_inner()
+        except ConnectionError:  # the client closed first (restart / stop)
+            pass
+
+    async def _serve_inner(self):
         p = self.protocol
         sockets = list(self._sockets)
         video_w = sockets[0][1]

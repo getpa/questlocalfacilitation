@@ -92,7 +92,7 @@ Quest-30	192.168.10.50:5555
 実装は `scripts/quest_multi_scrcpy.sh` を正として参照してください。起動設定は `./scripts/quest_multi_scrcpy.sh start --dry-run` と `README.md` で確認できます。
 
 - 公式 scrcpy 5.0.1 と同梱サーバーを使用（旧独自サーバーの上書きを廃止）。
-- 標準は長辺1280px・最大30fps・4Mbps。`MAX_SIZE` / `MAX_FPS` / `BIT_RATE` で変更可能。
+- 品質は `--quality low|standard|high`（または `QUALITY=`）で選択。標準（standard）は長辺1280px・最大30fps・4Mbps。帯域の目安は 1台あたり low 約1.7 / standard 約4.3 / high 約10.4 Mbps（50台で約84 / 213 / 522 Mbps）。詳細は README の「Capture quality presets」。`MAX_SIZE` / `MAX_FPS` / `BIT_RATE` で個別に上書き可能。
 - `SCRCPY_HWDEC=auto` でMacのハードウェアデコードを利用可能な場合に使用。問題の切り分けは `disabled`。
 - `VIDEO_BUFFER=50` はWi-Fiの揺らぎを吸収する代わりに表示遅延が50ms増えます（標準0）。
 - 端末ごとのワーカーが接続待ち・再試行を担当。ステータス監視はワーカーを重複起動しません。

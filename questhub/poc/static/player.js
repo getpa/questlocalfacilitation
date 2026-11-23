@@ -188,7 +188,9 @@ async function refresh() {
     ['serial', s.serial], ['映像', `${s.video.codec ?? ''} ${s.video.width ?? ''}×${s.video.height ?? ''}`],
     ['パケット', s.video.packets], ['キーフレーム', s.video.key_frames],
     ['音声', `${s.audio.codec ?? 'なし'} / ${s.audio.packets}`], ['視聴者', s.viewers],
+    ['品質', s.quality], ['実測帯域', s.mbps_in != null ? `${s.mbps_in} Mbps` : null],
   ]);
+  if ($('quality').value !== s.quality && document.activeElement !== $('quality')) $('quality').value = s.quality;
   const w = s.wifi || {};
   fill('wifi', [['SSID', w.ssid], ['BSSID', w.bssid], ['帯域', w.band], ['RSSI', w.rssi_dbm != null ? `${w.rssi_dbm} dBm` : null], ['リンク', w.link_mbps != null ? `${w.link_mbps} Mbps` : null]]);
   const r = s.recording || s.last_recording;
@@ -209,6 +211,20 @@ $('audio').onclick = async () => {
   else { await audioCtx.resume(); stats.audioPlaying = true; $('audio').textContent = '音声を停止'; }
 };
 $('mode').onchange = (e) => { stats.mode = e.target.value; reconnect(); };
+
+async function loadQuality() {
+  const q = await (await fetch('/api/quality')).json();
+  $('quality').innerHTML = q.presets.map((p) =>
+    `<option value="${p.name}">${p.label}（${p.max_size}px/${p.max_fps}fps, 約${p.mbps} Mbps/台・50台 ${p.mbps_50} Mbps）</option>`).join('')
+    + (q.current === 'custom' ? '<option value="custom">カスタム</option>' : '');
+  $('quality').value = q.current;
+}
+$('quality').onchange = async (e) => {
+  const res = await fetch('/api/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preset: e.target.value }) });
+  if (!res.ok) { alert((await res.json()).detail); loadQuality(); }
+};
+loadQuality();
 
 connect();
 refresh();

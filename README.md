@@ -214,6 +214,8 @@ The viewer (`https://<mac-ip>:8443/`) shows a low-fps key-frame grid. Clicking a
 
 The CLI launcher warns when it is started while the GUI is running, because capturing a headset twice doubles its load.
 
+Black capture: on Horizon OS the stream comes from Meta's compositor recording, which can turn completely black, for example when the headset is not worn, during passthrough, or with protected layers. The GUI detects this from key frames and marks the tile “黒画面”. It then tries to recover in steps: it recreates the capture, wakes the headset and marks it as worn (`prox_close`), and finally restarts the server. It also saves a diagnostic snapshot with the likely cause to `~/.questhub/diagnostics/`. See `docs/GUI_DESIGN.md` §4.10.
+
 ## Quest Hub PoC (single headset)
 
 The single-headset proof of concept that preceded the GUI (`docs/GUI_DESIGN.md` §7.1). It talks to the official scrcpy 5.0.1 server directly, shows the stream in the browser (WebCodecs), plays audio, and records Matroska (H.264 + Opus) without re-encoding.

@@ -199,6 +199,11 @@ def create_admin_app(app: Application) -> FastAPI:
                     await sup.request_key_frame()
             elif action == "native":
                 await app.streaming.open_native(serial)
+            elif action == "diagnose":
+                sup = app.streaming.supervisor(serial)
+                if sup is None:
+                    raise RuntimeError("その端末は表示していません")
+                return await sup.diagnose()
             else:
                 _err(ValueError(f"unknown action {action}"), 404)
         except (RuntimeError, ValueError, FileNotFoundError) as exc:

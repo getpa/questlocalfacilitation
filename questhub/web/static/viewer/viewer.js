@@ -54,8 +54,8 @@ function render() {
     t.el.querySelector('.name').textContent = d.alias;
     t.el.querySelector('.flags').innerHTML = d.recording ? '<span class="rec">REC</span>' : '';
     const st = t.el.querySelector('.state');
-    st.hidden = d.state === 'streaming';
-    st.textContent = d.state === 'streaming' ? '' : '再接続中';
+    st.hidden = d.state === 'streaming' && !d.black;
+    st.textContent = d.black ? '黒画面（Quest 側）' : d.state === 'streaming' ? '' : '再接続中';
   }
 }
 

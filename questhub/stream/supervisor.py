@@ -8,14 +8,18 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from datetime import datetime
 import logging
+from pathlib import Path
 import time
 
 from questhub.adb.client import Adb
 from questhub.core import events as ev
 from questhub.core.events import EventBus
 from questhub.devices import quest
+from questhub.stream import blackscreen
 from questhub.stream.hub import FrameHub
+from questhub.stream.protocol import MediaPacket
 from questhub.stream.quality import get_preset
 from questhub.stream.scrcpy_server import ScrcpyServer, StreamOptions
 
@@ -27,7 +31,9 @@ MAX_BACKOFF = 30.0
 
 class StreamSupervisor:
     def __init__(self, serial: str, target_fn, bus: EventBus, options: StreamOptions,
-                 adb: Adb | None = None, server_factory=None, wake: bool = True, tweaks: bool = False):
+                 adb: Adb | None = None, server_factory=None, wake: bool = True, tweaks: bool = False,
+                 black_detection: bool = False, black_recovery: bool = True, prox_nudge: bool = True,
+                 diag_dir: str | Path | None = None, probe_factory=None):
         self.serial = serial
         self.target_fn = target_fn            # () -> adb target or None
         self.bus = bus
@@ -50,6 +56,22 @@ class StreamSupervisor:
         self._backoff = MIN_BACKOFF
         self._streaming = asyncio.Event()
         self.started_at: float | None = None
+        # Black capture handling (blackscreen.py)
+        self.black_detection = black_detection
+        self.black_recovery = black_recovery
+        self.prox_nudge = prox_nudge
+        self.diag_dir = Path(diag_dir) if diag_dir else None
+        self._probe_factory = probe_factory or blackscreen.KeyFrameProbe
+        self._probe = None
+        self._probing = False
+        self._last_probe = 0.0
+        self.black = blackscreen.BlackState()
+        self.black_events = 0
+        self.black_cause: str | None = None
+        self.black_diag: dict | None = None
+        self.black_diag_file: str | None = None
+        self.last_recovery: str | None = None
+        self._recovery_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------ lifecycle
 
@@ -58,6 +80,7 @@ class StreamSupervisor:
             self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        self._cancel_recovery()
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
@@ -105,7 +128,7 @@ class StreamSupervisor:
                 self.started_at = time.monotonic()
                 self._set_state("streaming")
                 self._streaming.set()
-                await server.run(self.hub.publish_video, self.hub.publish_audio)
+                await server.run(self._on_video, self.hub.publish_audio)
                 raise ConnectionError("stream ended")
             except asyncio.CancelledError:
                 await server.stop()
@@ -123,6 +146,110 @@ class StreamSupervisor:
                 log.warning("%s: %s; restarting in %.0fs", self.serial, self.error, self._backoff)
                 await asyncio.sleep(self._backoff)
                 self._backoff = min(self._backoff * 2, MAX_BACKOFF)
+
+    # ------------------------------------------------------------ black capture
+
+    def _on_video(self, item) -> None:
+        self.hub.publish_video(item)
+        if (self.black_detection and isinstance(item, MediaPacket) and item.key_frame
+                and self.hub.video_config and not self._probing
+                and time.monotonic() - self._last_probe >= 1.0):
+            self._probing = True
+            self._last_probe = time.monotonic()
+            asyncio.get_running_loop().create_task(self._measure(self.hub.video_config.data, item.data))
+
+    async def _measure(self, config: bytes, key_frame: bytes) -> None:
+        try:
+            if self._probe is None:
+                self._probe = self._probe_factory()
+            luma = await asyncio.to_thread(self._probe.measure, config, key_frame)
+        except Exception as exc:  # detection must never disturb streaming
+            log.debug("black probe failed: %s", exc)
+            luma = None
+        finally:
+            self._probing = False
+        if luma is None:
+            return
+        change = self.black.update(luma)
+        if change == "black":
+            self.black_events += 1
+            self.last_recovery = None
+            self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, luma=round(luma.mean, 1))
+            asyncio.get_running_loop().create_task(self._diagnose())
+            if self.black_recovery:
+                self._recovery_task = asyncio.get_running_loop().create_task(self._recover())
+        elif change == "visible":
+            self._cancel_recovery()
+            self.bus.publish(ev.MEDIA_BLACK, self.serial, black=False, recovered_by=self.last_recovery)
+
+    def _cancel_recovery(self) -> None:
+        if self._recovery_task and not self._recovery_task.done():
+            self._recovery_task.cancel()
+        self._recovery_task = None
+
+    async def _recover(self) -> None:
+        while self.black.black:
+            started = time.monotonic()
+            for delay, step in blackscreen.RECOVERY_STEPS:
+                await asyncio.sleep(max(0.0, started + delay - time.monotonic()))
+                if not self.black.black:
+                    return
+                try:
+                    await self._recovery_step(step)
+                    self.last_recovery = step
+                    self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, recovery=step)
+                except Exception as exc:
+                    log.warning("%s: recovery %s failed: %s", self.serial, step, exc)
+            await asyncio.sleep(max(0.0, started + blackscreen.RECOVERY_REPEAT - time.monotonic()))
+
+    async def _recovery_step(self, step: str) -> None:
+        target = self.target_fn()
+        adb = self.adb.for_serial(target) if target else None
+        if step == "reset_video":
+            await self.request_key_frame()
+        elif step == "wake" and adb:
+            await quest.wake(adb)
+            if self.prox_nudge:
+                await adb.shell("am broadcast -a com.oculus.vrpowermanager.prox_close", check=False)
+        elif step == "restart" and self._server and self.state == "streaming":
+            self._reconfigure = True
+            self._streaming.clear()
+            await self._server.stop()
+
+    async def diagnose(self) -> dict:
+        """Manual snapshot (e.g. the operator sees black that detection missed)."""
+        await self._diagnose(manual=True)
+        return {"cause": self.black_cause, "summary": self.black_diag, "file": self.black_diag_file}
+
+    async def _diagnose(self, manual: bool = False) -> None:
+        """Snapshot the compositor state while black, to tell the causes apart."""
+        target = self.target_fn()
+        if not target:
+            return
+        adb = self.adb.for_serial(target)
+        sections = {}
+        for name, command in blackscreen.DIAG_COMMANDS:
+            try:
+                sections[name] = await adb.shell(command, timeout=15, check=False)
+            except Exception as exc:
+                sections[name] = f"<failed: {exc}>"
+        summary = blackscreen.summarize_diagnostics(sections)
+        cause = blackscreen.likely_cause(summary)
+        self.black_diag, self.black_cause = summary, cause
+        path = None
+        if self.diag_dir:
+            self.diag_dir.mkdir(parents=True, exist_ok=True)
+            kind = "manual" if manual else "black"
+            path = self.diag_dir / f"{kind}_{self.serial}_{datetime.now():%Y%m%d-%H%M%S}.txt"
+            body = [f"serial: {self.serial}", f"quality: {self.options.quality}", f"luma: {self.black.last_luma}",
+                    f"likely cause: {cause}", f"summary: {summary}", ""]
+            for name, text in sections.items():
+                body += [f"===== {name}", text.rstrip(), ""]
+            path.write_text("\n".join(body))
+        self.black_diag_file = str(path) if path else None
+        if not manual:
+            self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, cause=cause, diagnostics=summary,
+                             file=self.black_diag_file)
 
     # ------------------------------------------------------------ controls
 
@@ -173,4 +300,10 @@ class StreamSupervisor:
             "audio_codec": self.hub.audio_codec,
             "viewers": self.hub.subscriber_count,
             "locked": self.locked_reason,
+            "black": self.black.black,
+            "black_s": round(time.monotonic() - self.black.since, 1) if self.black.black and self.black.since else None,
+            "black_cause": self.black_cause if self.black.black else None,
+            "black_events": self.black_events,
+            "last_recovery": self.last_recovery,
+            "luma": round(self.black.last_luma.mean, 1) if self.black.last_luma else None,
         }

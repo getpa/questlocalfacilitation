@@ -68,6 +68,10 @@ function connectEvents() {
         : ev.data.step === 'start' ? `${ev.data.hosts} ホストを確認中…（${ev.data.ranges.join(', ')}）` : `${ev.data.done}/${ev.data.total}（発見 ${ev.data.found}）`;
     }
     if (ev.type === 'recording_stopped' && ev.data.reason === 'disk_full') toast('ディスク不足のため録画を停止しました', 'bad');
+    if (ev.type === 'media_black') {
+      if (ev.data.cause) toast(`${alias}: 映像が黒くなっています — ${ev.data.cause}（自動で復旧を試みます）`, 'warn');
+      else if (ev.data.black === false) toast(`${alias}: 映像が戻りました${ev.data.recovered_by ? `（${({ reset_video: 'キャプチャ再作成', wake: '画面の再起動', restart: 'サーバー再起動' })[ev.data.recovered_by] || ev.data.recovered_by}）` : ''}`, 'ok');
+    }
     if (ev.type !== 'recording_progress' || $('#tab-recording').classList.contains('active')) refreshSoon(300);
   };
   ws.onclose = () => setTimeout(connectEvents, 2000);
@@ -146,6 +150,7 @@ function renderMonitor() {
     t.el.querySelector('.state').innerHTML = d.stream.state === 'streaming' ? (t.slow ? '低fps' : '') : esc((STREAM[d.stream.state] || [d.stream.state])[0]);
     t.el.querySelector('.state').hidden = d.stream.state === 'streaming' && !t.slow;
     t.el.querySelector('.flags').innerHTML = (d.recording ? '<span class="rec">REC</span>' : '') + (warn ? '<span class="warn">!</span>' : '')
+      + (d.stream.black ? `<span class="warn" title="${esc(d.stream.black_cause || 'Quest 側で映像が黒くなっています')}">黒画面</span>` : '')
       + (d.battery != null ? `<span>${d.battery}%</span>` : '');
     t.el.querySelector('.meta').textContent = `${d.stream.quality || ''}`;
   });
@@ -263,6 +268,11 @@ $('#focus-audio').onclick = async () => {
 $('#focus-quality').onchange = (e) => focus && act(() => api('POST', `/api/streams/${encodeURIComponent(focus.serial)}/quality`, { preset: e.target.value }), '品質を変更しました');
 $('#focus-key').onclick = () => focus && act(() => api('POST', `/api/streams/${encodeURIComponent(focus.serial)}/keyframe`));
 $('#focus-native').onclick = () => focus && act(() => api('POST', `/api/streams/${encodeURIComponent(focus.serial)}/native`), 'ネイティブ表示を開きました（閉じると自動で再開）');
+$('#focus-diag').onclick = async () => {
+  if (!focus) return;
+  const r = await act(() => api('POST', `/api/streams/${encodeURIComponent(focus.serial)}/diagnose`));
+  if (r) toast(`診断: ${r.cause}（記録: ${r.file || 'なし'}）`, 'warn');
+};
 $$('[data-key]').forEach((b) => b.onclick = () => focus && act(() => api('POST', `/api/input/${encodeURIComponent(focus.serial)}/key`, { key: b.dataset.key })));
 $('#focus-text-form').onsubmit = (e) => {
   e.preventDefault();
@@ -313,7 +323,7 @@ function renderDevices() {
       <td>${d.battery != null ? `${d.battery}%${d.charging ? ' ⚡' : ''}` : '—'}</td>
       <td><input class="num" data-field="grid_col" type="number" min="0" value="${d.grid_col ?? ''}"> <input class="num" data-field="grid_row" type="number" min="0" value="${d.grid_row ?? ''}"></td>
       <td><select data-field="quality">${state.presets.map((p) => `<option value="${p.name}" ${(s.quality || d.quality || state.settings.default_quality) === p.name ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select></td>
-      <td>${chip(STREAM, s.state || 'idle')}${d.recording ? ' <span class="chip bad">REC</span>' : ''}</td>
+      <td>${chip(STREAM, s.state || 'idle')}${d.recording ? ' <span class="chip bad">REC</span>' : ''}${s.black ? ` <span class="chip warn" title="${esc(s.black_cause || '')}">黒画面</span>` : ''}</td>
       <td class="row">
         ${['wifi', 'usb'].includes(c.state) ? '<button data-act="disconnect">切断</button>' : '<button data-act="connect">接続</button>'}
         ${streaming ? '<button data-act="stop">表示停止</button>' : '<button data-act="start">表示</button>'}

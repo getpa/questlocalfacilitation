@@ -15,6 +15,7 @@ import time
 USB_DEVICE_ATTACHED = "usb_device_attached"
 CONNECTION_CHANGED = "connection_changed"
 MEDIA_STATE_CHANGED = "media_state_changed"
+MEDIA_BLACK = "media_black"
 DEVICE_OBSERVED = "device_observed"
 IP_CHANGED = "ip_changed"
 SSID_CHANGED = "ssid_changed"

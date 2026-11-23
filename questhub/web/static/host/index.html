@@ -145,6 +145,9 @@
           <label><input type="checkbox" name="quest_tweaks"> Quest OS 対策（近接センサー・Guardian）</label>
           <label>計測間隔（秒） <input name="telemetry_interval" type="number" min="10" step="5"></label>
           <label>自動で低fpsにする閾値（fps） <input name="tile_fallback_fps" type="number" min="1" step="1"></label>
+          <label><input type="checkbox" name="black_detection"> 黒画面（Quest 側）を検出する</label>
+          <label><input type="checkbox" name="black_recovery"> 黒画面から自動で復旧を試みる</label>
+          <label><input type="checkbox" name="black_prox_nudge"> 復旧時に「装着中」扱いにする（prox_close）</label>
           <label>録画の保存先 <input name="record_dir" size="40"></label>
           <label>録画を止める空き容量（GB） <input name="disk_min_free_gb" type="number" min="1" step="1"></label>
           <label>ビューワーのポート <input name="viewer_port" type="number"></label>
@@ -179,6 +182,7 @@
         <label>品質 <select id="focus-quality"></select></label>
         <button id="focus-key">キーフレーム要求</button>
         <button id="focus-native">ネイティブ表示</button>
+        <button id="focus-diag" title="映像が黒いときに Quest の表示状態を記録します">黒画面の診断</button>
         <label><input type="checkbox" id="focus-input"> 画面クリックで操作</label>
         <div class="row">
           <button data-key="BACK">BACK</button><button data-key="HOME">HOME</button>

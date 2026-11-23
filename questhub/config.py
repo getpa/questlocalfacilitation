@@ -28,6 +28,9 @@ class Settings:
     quest_tweaks: bool = False
     wake_on_start: bool = True
     tile_fallback_fps: float = 20.0
+    black_detection: bool = True           # detect black capture (Quest compositor) from key frames
+    black_recovery: bool = True            # RESET_VIDEO -> wake/prox_close -> restart while black
+    black_prox_nudge: bool = True          # include prox_close ("headset worn") in the recovery
 
     @classmethod
     def load(cls, path: Path) -> "Settings":

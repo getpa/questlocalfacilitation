@@ -74,7 +74,8 @@ class Application:
                                      track_source=track_source, auto_reconnect=auto_reconnect)
         self.provisioning = ProvisioningService(self.manager, self.registry)
         self.telemetry = TelemetryService(self.manager, self.registry, self.settings.telemetry_interval)
-        self.streaming = StreamingService(self.manager, self.registry, self.settings, supervisor_factory)
+        self.streaming = StreamingService(self.manager, self.registry, self.settings, supervisor_factory,
+                                          diag_dir=self.data_dir / "diagnostics")
         self.recording = RecordingService(self.streaming, self.registry, self.settings)
         self.input = InputService(self.streaming)
         self.ca = LocalCA(self.data_dir / "tls")
@@ -102,6 +103,7 @@ class Application:
     def save_settings(self) -> None:
         self.settings.save(self.settings_path)
         self.telemetry.interval = self.settings.telemetry_interval
+        self.streaming.apply_settings()
 
     # ------------------------------------------------------------ read models for the UI
 
@@ -134,7 +136,7 @@ class Application:
                         "grid_col": d.get("grid_col"), "grid_row": d.get("grid_row"),
                         "state": stream.get("state"), "quality": stream.get("quality"),
                         "width": stream.get("width"), "height": stream.get("height"),
-                        "recording": d["recording"]})
+                        "recording": d["recording"], "black": bool(stream.get("black"))})
         return out
 
     def network_summary(self) -> dict:

@@ -19,12 +19,13 @@ log = logging.getLogger(__name__)
 
 class StreamingService:
     def __init__(self, manager: DeviceManager, registry: Registry, settings: Settings,
-                 supervisor_factory=None):
+                 supervisor_factory=None, diag_dir=None):
         self.manager = manager
         self.registry = registry
         self.settings = settings
         self.bus = manager.bus
         self.supervisors: dict[str, StreamSupervisor] = {}
+        self.diag_dir = diag_dir
         self._factory = supervisor_factory or self._make_supervisor
         self._watch: asyncio.Task | None = None
         self._native: dict[str, asyncio.subprocess.Process] = {}
@@ -40,7 +41,17 @@ class StreamingService:
     def _make_supervisor(self, serial: str) -> StreamSupervisor:
         return StreamSupervisor(serial, lambda: self.manager.target(serial), self.bus, self._options_for(serial),
                                 adb=self.manager.adb, wake=self.settings.wake_on_start,
-                                tweaks=self.settings.quest_tweaks)
+                                tweaks=self.settings.quest_tweaks,
+                                black_detection=self.settings.black_detection,
+                                black_recovery=self.settings.black_recovery,
+                                prox_nudge=self.settings.black_prox_nudge, diag_dir=self.diag_dir)
+
+    def apply_settings(self) -> None:
+        """Propagate black-capture settings to running supervisors."""
+        for sup in self.supervisors.values():
+            sup.black_detection = self.settings.black_detection
+            sup.black_recovery = self.settings.black_recovery
+            sup.prox_nudge = self.settings.black_prox_nudge
 
     async def start(self) -> None:
         events = self.bus.subscribe(ev.CONNECTION_CHANGED)

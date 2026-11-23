@@ -13,6 +13,7 @@ dependencies:
   - requests
   # Quest Hub GUI (docs/GUI_DESIGN.md §9.7)
   - av
+  - numpy
   - fastapi
   - uvicorn
   - cryptography

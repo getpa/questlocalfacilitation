@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub PoC</title>
+<style>
+  :root { --bg: #f6f6f4; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #deded8; --accent: #2b6cb0; --rec: #c53030; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ececea; --muted: #a3a39d; --card: #222220; --line: #3a3a37; --accent: #63a4ff; --rec: #ff6b6b; }
+  }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .muted { color: var(--muted); }
+  .stage { background: #000; border-radius: 8px; overflow: hidden; position: relative; }
+  .stage.recording { outline: 3px solid var(--rec); }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  button.danger { border-color: var(--rec); color: var(--rec); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .card h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--muted); }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  select { font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Quest Hub PoC</h1>
+    <span class="muted" id="state">接続中…</span>
+  </header>
+  <div class="stage" id="stage"><canvas id="screen" width="1280" height="720"></canvas></div>
+  <div class="controls">
+    <button class="danger" id="rec">録画開始</button>
+    <button id="audio">音声を再生</button>
+    <button id="key">キーフレーム要求</button>
+    <label>表示 <select id="mode">
+      <option value="full">全フレーム</option>
+      <option value="keyframes">キーフレームのみ（低fps）</option>
+    </select></label>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>ブラウザ（WebCodecs）</h2><dl id="client"></dl></section>
+    <section class="card"><h2>端末・ストリーム</h2><dl id="device"></dl></section>
+    <section class="card"><h2>Wi-Fi</h2><dl id="wifi"></dl></section>
+    <section class="card"><h2>録画</h2><dl id="recording"></dl></section>
+  </div>
+</main>
+<script type="module" src="/static/player.js"></script>
+</body>
+</html>

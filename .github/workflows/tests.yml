@@ -46,5 +46,7 @@ jobs:
         run: /bin/bash ./install.sh --strict | tee rerun.log && grep -q 'Environment is up to date' rerun.log
       - name: Doctor
         run: /bin/bash ./install.sh --doctor
+      - name: Offline tests with the project environment (PoC media pipeline)
+        run: ./.mamba-env/bin/python -m unittest discover -s tests -v
       - name: Uninstall
         run: /bin/bash ./install.sh --uninstall --yes && test ! -e .mamba-env && test ! -e .tools

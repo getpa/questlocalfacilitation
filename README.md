@@ -172,6 +172,25 @@ Use `scripts/quest_os_tweaks.sh engage` / `restore` outside the launcher when yo
 
 If flicker appears when the controller laser hovers Meta UI elements, keep cropping/angle flags disabled and restart the affected session. Automatic recovery handles process/connection failures; it cannot detect flicker or a frozen image while scrcpy is still running.
 
+## Quest Hub PoC (GUI preview)
+
+A single-headset proof of concept for the upcoming GUI (`docs/GUI_DESIGN.md` §7.1). It talks to the official scrcpy 5.0.1 server directly, shows the stream in the browser (WebCodecs), plays audio, and records Matroska (H.264 + Opus) without re-encoding.
+
+```bash
+./.mamba-env/bin/python -m questhub.poc                                  # first adb device -> http://127.0.0.1:8765
+./.mamba-env/bin/python -m questhub.poc --serial 192.168.22.201:5555
+./.mamba-env/bin/python -m questhub.poc --record-seconds 10                # headless recording into recordings/poc/
+```
+
+Open the page in Chrome. Use "録画開始" to start or stop recording, "音声を再生" to play audio, and the display menu to switch to key-frame-only (low fps) mode.
+
+Tests:
+
+```bash
+./.mamba-env/bin/python -m unittest discover -s tests -v                    # offline, includes the media pipeline
+QH_TEST_DEVICE=<adb serial> ./.mamba-env/bin/python -m unittest tests.test_poc_device -v   # real headset
+```
+
 ## Updating Dependencies
 Edit `environment.yml`, then regenerate both lock files and reinstall:
 

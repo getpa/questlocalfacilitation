@@ -1,6 +1,6 @@
 # Quest Hub (GUI版) 技術検討・設計書
 
-- ステータス: Draft v0.4（2026-11-23）— Phase 0a 実装済み
+- ステータス: Draft v0.4（2026-11-23）— Phase 0a 実装済み、Phase 0b（PoC）実施済み（§7.1）
   - v0.2: 要件の確定事項（§1.1）を反映
   - v0.3: モジュールの責任分離を見直し（§3）、接続先SSIDの収集（R7, §4.9）を追加
   - v0.4: Mambaforge を前提にしない環境構築インストーラー（§9, Phase 0a）を追加
@@ -385,6 +385,29 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 | P7 | iPad Safari の `AudioDecoder` が Opus に対応しているか | iPad では音声なし |
 | P8 | タッチ注入が Quest の 2D パネルで効くか | 入力はキー送信だけにし、細かい操作は「ネイティブで開く」 |
 | P9 | Quest 3 で `cmd wifi status` / `dumpsys wifi` から SSID が取得できるか（`<unknown ssid>` に伏せられないか） | `dumpsys connectivity`、それも不可なら BSSID / IPサブネットだけで AP を識別 |
+
+### 7.1 PoC 結果（2026-11-23, Quest 3 / Horizon OS Android 14, Wi-Fi 6E）
+
+実装: `questhub/`（`stream/protocol.py`, `stream/scrcpy_server.py`, `stream/hub.py`, `record/recorder.py`, `devices/wifi_parse.py`, `poc/`）。起動: `./.mamba-env/bin/python -m questhub.poc`。
+
+| # | 結果 | 実測・備考 |
+|---|------|-----------|
+| P1 | ✅ | 公式 5.0.1 サーバーを直接起動し、映像・音声・制御の3ソケットを確立（接続まで約1秒）。プロトコルは v5.0.1 のソース（`Streamer.java` / `DesktopConnection.java`）に一致: コーデックID(4B) → セッションパケット(12B, MSB=1, 幅・高さ) → メディアパケット(12Bヘッダ, bit62=config, bit61=key, ビッグエンディアン)。ダミーバイトは最初のソケットの accept 直後、端末名(64B)は全ソケット接続後 |
+| P2 | 一部 | 1台は Chromium（アプリ内ブラウザ）で WebCodecs 30fps・エラー0。30台の同時デコードは未検証（実機が1台のため） |
+| P3 | ✅（注記あり） | `video_codec_options=i-frame-interval=1` を指定しても Quest のエンコーダは約2秒間隔。`RESET_VIDEO`(17) はキャプチャを再起動し、約0.1秒でキーフレーム（セッション・config も再送）。録画開始時に使用 |
+| P4 | 未 | iPad 実機なし |
+| P5 | 未確認 | 今回の取得では黒画面にならなかった。ただし装着状態は記録していないため、未装着時の挙動は別途確認が必要 |
+| P6 | ✅ | `audio_source=playback` + `audio_dup=true` で Opus 48kHz/2ch を取得。ヘッドセット側の音も残る |
+| P7 | 未 | iPad 実機なし |
+| P8 | 未 | PoC では入力未実装 |
+| P9 | ✅ | `cmd wifi status` で SSID・BSSID・RSSI・周波数・リンク速度が取得できた（伏せ字なし） |
+
+その他の知見
+- 映像は 1280×684（両眼並列）、静止に近い画面で約0.7Mbps。
+- PyAV の `add_mux_stream` は extradata を設定できないため、録画は「テンプレートストリーム」（H.264 は config+キーフレームを h264 demuxer で開いたもの、Opus は libopus で生成した1パケットの Ogg）から出力ストリームを作り、codec_context.extradata に端末の SPS/PPS・OpusHead を設定する方式にした。MKV は H.264(avcC) + Opus で再生・デコードできることを確認。
+- 映像と音声の PTS は同じ単調時計で、録画の先頭キーフレームを基準にすると音声の開始ずれは約15ms。
+- 録画開始時に最初のキーフレームより音声 config が遅れることがあるため、最大1秒待ってから書き始める。
+- サーバーを端末側で強制終了しても、セッションは3秒（テストでは1秒）後に自動で再接続した。
 
 **PoC（1台）: 映像+音声を受信 → Chrome に表示・再生 → MKV 録画 + SSID 取得**。P1・P3・P6・P9 を最初に確認し、P2 は台数を増やして負荷試験します。失敗した場合は方式A に切り替えます。
 

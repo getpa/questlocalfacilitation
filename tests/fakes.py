@@ -20,6 +20,7 @@ class FakeHeadset:
         self.serial, self.ip, self.ssid, self.level, self.n = serial, ip, ssid, level, n
         self.tcpip = False
         self.commands: list[tuple] = []
+        self.shell_output: dict[str, str] = {}   # substring of a shell command -> its output
 
 
 class FakeAdbWorld:
@@ -91,6 +92,9 @@ class FakeAdb:
             return WIFI_STATUS.format(ssid=h.ssid, ip=h.ip, n=h.n)
         if cmd.startswith("dumpsys battery"):
             return BATTERY.format(level=h.level, usb="false")
+        for needle, out in h.shell_output.items():
+            if needle in cmd:
+                return out
         return ""
 
     async def shell(self, command, timeout=30, check=True):

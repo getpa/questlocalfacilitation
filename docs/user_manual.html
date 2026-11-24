@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quest Hub ユーザーマニュアル</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #dde2ea; --panel: #f5f7fa;
+  --accent: #2357c6; --accent-soft: #e6eefc; --warn: #a15c00; --warn-soft: #fff3df;
+  --bad: #b42318; --bad-soft: #fdecea; --ok: #157347; --ok-soft: #e4f4ea; --code: #eef1f5;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171d; --fg: #e5e9f0; --muted: #9aa3b2; --line: #2c323d; --panel: #1b1f27;
+    --accent: #7aa7ff; --accent-soft: #1e2a44; --warn: #f0b252; --warn-soft: #33270f;
+    --bad: #ff8a80; --bad-soft: #3a1c1a; --ok: #6fd49b; --ok-soft: #15301f; --code: #222833;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171d; --fg: #e5e9f0; --muted: #9aa3b2; --line: #2c323d; --panel: #1b1f27;
+  --accent: #7aa7ff; --accent-soft: #1e2a44; --warn: #f0b252; --warn-soft: #33270f;
+  --bad: #ff8a80; --bad-soft: #3a1c1a; --ok: #6fd49b; --ok-soft: #15301f; --code: #222833;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.75 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+}
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+nav.toc {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 24px 16px;
+  border-right: 1px solid var(--line); background: var(--panel); font-size: 13.5px;
+}
+nav.toc .brand { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+nav.toc .ver { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+nav.toc ol { margin: 0; padding-left: 1.6em; }
+nav.toc li { margin: 2px 0; }
+nav.toc a { color: var(--fg); text-decoration: none; }
+nav.toc a:hover { color: var(--accent); }
+main { padding: 32px 48px 80px; max-width: 920px; }
+h1 { font-size: 28px; margin: 0 0 4px; line-height: 1.3; }
+h2 { font-size: 21px; margin: 48px 0 12px; padding-bottom: 6px; border-bottom: 2px solid var(--line); scroll-margin-top: 16px; }
+h3 { font-size: 16.5px; margin: 28px 0 8px; }
+p, li { max-width: 72ch; }
+a { color: var(--accent); }
+code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--code); padding: 1px 5px; border-radius: 4px; word-break: break-word; }
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+pre code { background: none; padding: 0; }
+.ui { display: inline-block; padding: 0 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); font-size: 0.92em; white-space: nowrap; }
+.lead { color: var(--muted); margin-top: 0; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--panel); }
+.table-wrap { overflow-x: auto; }
+.note, .warn, .danger { border-left: 4px solid; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+.note { border-color: var(--accent); background: var(--accent-soft); }
+.warn { border-color: var(--warn); background: var(--warn-soft); }
+.danger { border-color: var(--bad); background: var(--bad-soft); }
+.note > :first-child, .warn > :first-child, .danger > :first-child { margin-top: 0; }
+.note > :last-child, .warn > :last-child, .danger > :last-child { margin-bottom: 0; }
+.chip { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--line); white-space: nowrap; }
+.chip.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.chip.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.checklist { list-style: none; padding-left: 0; }
+.checklist li { padding-left: 1.7em; position: relative; margin: 4px 0; }
+.checklist li::before { content: ""; position: absolute; left: 0; top: 0.4em; width: 1em; height: 1em; border: 1.5px solid var(--muted); border-radius: 3px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; background: var(--panel); }
+.card h3 { margin-top: 4px; }
+figure { margin: 16px 0; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+svg text { font-family: inherit; fill: var(--fg); }
+svg .box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+svg .box-accent { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .line { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg .sub { fill: var(--muted); font-size: 12px; }
+.theme-toggle { margin-top: 18px; font-size: 12.5px; }
+.theme-toggle button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.toc-toggle { display: none; }
+@media (max-width: 860px) {
+  .layout { display: block; }
+  nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 14px 16px; }
+  nav.toc ol { columns: 2; column-gap: 20px; }
+  main { padding: 20px 16px 60px; }
+  h1 { font-size: 23px; }
+}
+@media (max-width: 480px) { nav.toc ol { columns: 1; } }
+@media print {
+  :root { --bg: #fff; --fg: #000; --muted: #444; --line: #bbb; --panel: #f3f3f3; --code: #f0f0f0; }
+  .layout { display: block; }
+  nav.toc { position: static; height: auto; border: none; background: none; page-break-after: always; }
+  nav.toc ol { columns: 1; }
+  .theme-toggle { display: none; }
+  main { max-width: none; padding: 0; }
+  h2 { page-break-after: avoid; break-after: avoid; }
+  table, pre, figure, .note, .warn, .danger, .card { page-break-inside: avoid; break-inside: avoid; }
+  a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="目次">
+  <div class="brand">Quest Hub</div>
+  <div class="ver">ユーザーマニュアル（講師・TA 向け）</div>
+  <ol>
+    <li><a href="#overview">概要と構成</a></li>
+    <li><a href="#requirements">動作環境</a></li>
+    <li><a href="#install">インストール</a></li>
+    <li><a href="#launch">起動と停止</a></li>
+    <li><a href="#setup">初回準備</a></li>
+    <li><a href="#screen">画面の見方</a></li>
+    <li><a href="#quality">品質プリセットと帯域</a></li>
+    <li><a href="#audio">音声</a></li>
+    <li><a href="#recording">録画</a></li>
+    <li><a href="#input">入力操作</a></li>
+    <li><a href="#viewer">ブラウザビューワー</a></li>
+    <li><a href="#ssid">SSID の変更警告</a></li>
+    <li><a href="#black">黒画面の検出・復旧</a></li>
+    <li><a href="#checklist">授業のチェックリスト</a></li>
+    <li><a href="#trouble">トラブルシューティング</a></li>
+    <li><a href="#cli">CLI との関係</a></li>
+    <li><a href="#appendix">付録（開発者向け）</a></li>
+  </ol>
+  <div class="theme-toggle">表示: <button type="button" data-set-theme="">自動</button> <button type="button" data-set-theme="light">ライト</button> <button type="button" data-set-theme="dark">ダーク</button></div>
+</nav>
+
+<main>
+<h1>Quest Hub ユーザーマニュアル</h1>
+<p class="lead">Mac 1台で最大50台の Meta Quest 3 を表示・録画・管理するためのアプリです。このマニュアルでは、授業や研究室で使うときの操作手順を説明します。</p>
+
+<!-- 1 -->
+<h2 id="overview">1. 概要と構成</h2>
+<p>Quest Hub は Mac で動くローカルの Web アプリです。管理画面は Chrome のアプリウィンドウとして開きます。次のことをブラウザから操作できます。</p>
+<ul>
+  <li>Quest の Wi-Fi 経由のデバッグ（ADB）を有効にする</li>
+  <li>端末の IP アドレス・接続先 SSID・電池残量を記録する（端末台帳）</li>
+  <li>最大50台の画面を一覧で表示し、1台を拡大して音声を聞く</li>
+  <li>映像と音声を録画する</li>
+  <li>PC・Android・iPad のブラウザ向けに、閲覧専用のビューワーを公開する</li>
+  <li>キー入力・タップ・文字入力を送る</li>
+</ul>
+
+<figure>
+<svg viewBox="0 0 760 300" role="img" aria-label="構成図：Quest 3 が Wi-Fi で Mac に映像と音声を送り、Mac の管理画面とビューワーで表示する">
+  <rect class="box" x="10" y="20" width="170" height="260" rx="10"/>
+  <text x="95" y="46" text-anchor="middle" font-weight="700">Quest 3 × 最大50台</text>
+  <rect class="box-accent" x="30" y="66" width="130" height="40" rx="6"/><text x="95" y="91" text-anchor="middle">Quest-01</text>
+  <rect class="box-accent" x="30" y="116" width="130" height="40" rx="6"/><text x="95" y="141" text-anchor="middle">Quest-02</text>
+  <text x="95" y="180" text-anchor="middle" class="sub">…</text>
+  <rect class="box-accent" x="30" y="196" width="130" height="40" rx="6"/><text x="95" y="221" text-anchor="middle">Quest-50</text>
+  <text x="95" y="262" text-anchor="middle" class="sub">ADB（ポート 5555）</text>
+
+  <path class="line" d="M180 150 H300"/>
+  <text x="240" y="138" text-anchor="middle" class="sub">Wi-Fi</text>
+  <text x="240" y="170" text-anchor="middle" class="sub">映像 H.264 + 音声 Opus</text>
+
+  <rect class="box" x="300" y="20" width="210" height="260" rx="10"/>
+  <text x="405" y="46" text-anchor="middle" font-weight="700">Mac（Quest Hub）</text>
+  <rect class="box-accent" x="318" y="66" width="174" height="44" rx="6"/>
+  <text x="405" y="86" text-anchor="middle">管理画面</text><text x="405" y="102" text-anchor="middle" class="sub">127.0.0.1:8765（Chrome）</text>
+  <rect class="box" x="318" y="120" width="174" height="44" rx="6"/>
+  <text x="405" y="140" text-anchor="middle">録画</text><text x="405" y="156" text-anchor="middle" class="sub">recordings/ に MKV</text>
+  <rect class="box" x="318" y="174" width="174" height="44" rx="6"/>
+  <text x="405" y="194" text-anchor="middle">ビューワー（HTTPS）</text><text x="405" y="210" text-anchor="middle" class="sub">:8443 ／ 証明書ページ :8766</text>
+  <text x="405" y="252" text-anchor="middle" class="sub">データ: ~/.questhub/</text>
+
+  <path class="line" d="M510 196 H600"/>
+  <text x="555" y="186" text-anchor="middle" class="sub">LAN</text>
+  <rect class="box" x="600" y="120" width="150" height="150" rx="10"/>
+  <text x="675" y="146" text-anchor="middle" font-weight="700">閲覧用の端末</text>
+  <text x="675" y="176" text-anchor="middle">PC</text>
+  <text x="675" y="202" text-anchor="middle">Android</text>
+  <text x="675" y="228" text-anchor="middle">iPad / iPhone</text>
+  <text x="675" y="254" text-anchor="middle" class="sub">閲覧のみ</text>
+</svg>
+<figcaption>図1　構成。Quest の映像は Mac が受け取り、管理画面・録画・ビューワーに配ります。Quest に負荷をかけるのは Mac への1本のストリームだけです。</figcaption>
+</figure>
+
+<div class="note"><p>管理画面は Mac 本体でだけ開けます（<code>127.0.0.1</code>）。ほかの端末には、閲覧専用のビューワーを公開します。ビューワーからは操作できません。端末の IP や SSID も表示しません。</p></div>
+
+<!-- 2 -->
+<h2 id="requirements">2. 動作環境</h2>
+<div class="table-wrap"><table>
+  <tr><th>項目</th><th>要件</th></tr>
+  <tr><td>Mac</td><td>macOS 13（Ventura）以降。Apple Silicon・Intel のどちらでも動作します。50台を扱う場合は、Mac を有線 LAN でつなぐことを推奨します。</td></tr>
+  <tr><td>ブラウザ（管理画面）</td><td>Google Chrome を推奨します。Chrome がない場合は既定のブラウザで開きます（WebCodecs 対応が必要です）。</td></tr>
+  <tr><td>Quest</td><td>Meta Quest 3。開発者モードを有効にし、初回だけ USB ケーブルで Mac に接続します。</td></tr>
+  <tr><td>ネットワーク</td><td>Quest と Mac が同じ LAN にあり、互いに通信できること（端末どうしの通信を遮断するゲスト隔離が無効であること）。Wi-Fi 6 / 6E・5GHz 以上を推奨します。</td></tr>
+  <tr><td>閲覧用の端末</td><td>Chrome・Edge（PC・Android）、Safari（Mac・iPad / iPhone、iPadOS 16.4 以降）。最初に1回、証明書の導入が必要です。</td></tr>
+  <tr><td>その他</td><td>Homebrew・conda・Xcode Command Line Tools は不要です。インストーラーがリポジトリ内に必要なものを用意します。</td></tr>
+</table></div>
+
+<!-- 3 -->
+<h2 id="install">3. インストール</h2>
+<p>ターミナルでリポジトリのフォルダに移動し、次を実行します。管理者権限（sudo）は不要で、シェルの設定も変更しません。</p>
+<pre><code>./install.sh            # 初回インストール。更新後の再実行も可
+./install.sh --doctor   # 環境チェックだけを行う</code></pre>
+<p>インストーラーは、チェックサムを検証した micromamba を <code>.tools/</code> に置き、Python 環境・adb・scrcpy 5.0.1 を <code>.mamba-env/</code> に入れます。最後に環境チェック（<code>--doctor</code> と同じ）を行います。</p>
+
+<h3>環境チェック（--doctor）で確認する項目</h3>
+<ul>
+  <li>micromamba、Python と必要なモジュール（av、fastapi、uvicorn、cryptography、qrcode、requests）</li>
+  <li>adb、scrcpy（5.0.1 であること）</li>
+  <li>Google Chrome（見つからない場合は警告）</li>
+  <li>使用するポート</li>
+</ul>
+<p><code>FAIL</code> が出た場合は、<code>./install.sh</code> をもう一度実行してください。</p>
+
+<h3>その他のオプション</h3>
+<div class="table-wrap"><table>
+  <tr><th>オプション</th><th>用途</th></tr>
+  <tr><td><code>--strict</code></td><td>lock ファイルと固定版の platform-tools だけでインストールします。授業用の Mac を同じ構成にそろえたいときに使います。</td></tr>
+  <tr><td><code>--build-from-source</code></td><td>scrcpy をソースからビルドします（Xcode Command Line Tools が必要です）。通常は不要です。</td></tr>
+  <tr><td><code>--relock [osx-arm64|osx-64]</code></td><td>依存関係を解決し直して lock ファイルを書き換えます（保守担当者向け）。</td></tr>
+  <tr><td><code>--uninstall --yes</code></td><td><code>.tools/</code> と <code>.mamba-env/</code> を削除します。</td></tr>
+  <tr><td><code>--uninstall --purge-data --yes</code></td><td>上に加えて、台帳・設定・証明書（<code>~/.questhub</code>）も削除します。</td></tr>
+</table></div>
+
+<div class="warn"><p><strong>macOS 15 以降の「ローカルネットワーク」許可</strong>：初めて Quest に接続するとき、ターミナルアプリに対してローカルネットワークへのアクセス許可が求められます。許可しないと接続が <code>No route to host</code> で失敗します。拒否してしまった場合は、システム設定 ＞ プライバシーとセキュリティ ＞ ローカルネットワーク で許可してください。</p></div>
+
+<!-- 4 -->
+<h2 id="launch">4. 起動と停止</h2>
+<h3>起動</h3>
+<p>Finder で <code>questhub.command</code> をダブルクリックするか、ターミナルで次を実行します。</p>
+<pre><code>./questhub.command</code></pre>
+<p>Chrome のアプリウィンドウで管理画面（<code>http://127.0.0.1:8765/</code>）が開きます。ウィンドウを閉じてしまった場合は、Chrome でこの URL を開いてください。</p>
+<div class="table-wrap"><table>
+  <tr><th>起動オプション</th><th>内容</th></tr>
+  <tr><td><code>--port 番号</code></td><td>管理画面のポートを変更します（既定 8765）。</td></tr>
+  <tr><td><code>--no-browser</code></td><td>管理画面のウィンドウを自動で開きません。</td></tr>
+  <tr><td><code>--data-dir パス</code></td><td>データの保存先を変更します（既定 <code>~/.questhub</code>）。</td></tr>
+  <tr><td><code>-v</code></td><td>詳しいログを表示します。</td></tr>
+</table></div>
+<p>すでに起動している場合は、2つ目は起動せず、既存の管理画面を開きます。</p>
+
+<h3>停止</h3>
+<p>起動したターミナルで <kbd>Ctrl</kbd>+<kbd>C</kbd> を押します。録画中のファイルは正しく閉じられます。授業の後は、先に管理画面の <span class="ui">授業を終了</span> を使うことを推奨します（<a href="#checklist">14章</a>）。</p>
+
+<!-- 5 -->
+<h2 id="setup">5. 初回準備</h2>
+<h3>5.1 開発者モードと USB デバッグ</h3>
+<ol>
+  <li>スマートフォンの Meta Horizon アプリで、ヘッドセットの開発者モードを有効にします。</li>
+  <li>Quest を USB ケーブルで Mac に接続します。</li>
+  <li>ヘッドセット内に「USB デバッグを許可しますか？」と表示されたら、<strong>「常に許可」</strong>を選びます。</li>
+</ol>
+
+<h3>5.2 Wi-Fi 化（管理画面の「端末」タブ）</h3>
+<ol>
+  <li><span class="ui">端末</span> タブを開きます。「USB 接続の端末」に接続中の Quest が表示されます。</li>
+  <li>対象にチェックを入れて <span class="ui">選択した端末を Wi-Fi 化</span>、または <span class="ui">USB 端末をすべて Wi-Fi 化</span> を押します。</li>
+  <li>「Wi-Fi 化しました（IP / SSID）」と通知されたら、USB ケーブルを抜いて構いません。IP と SSID は台帳に記録されます。</li>
+</ol>
+<p>表示されるラベルの意味は次のとおりです。</p>
+<ul>
+  <li><span class="chip">USB</span>：USB で接続中です。</li>
+  <li><span class="chip ok">Wi-Fi 済み</span>：すでに Wi-Fi 化されています。</li>
+  <li><span class="chip warn">ヘッドセット内で USB デバッグを許可してください</span>：5.1 の許可がまだです。</li>
+</ul>
+<div class="note"><p>Wi-Fi ADB は、Quest を再起動すると無効になることがあります。その場合、接続状態が <span class="chip bad">USB で再有効化が必要</span> になります。もう一度 USB でつないで Wi-Fi 化してください。IP の変化を防ぐため、ルーターの DHCP 予約で端末ごとに IP を固定しておくと運用が楽になります。</p></div>
+
+<h3>5.3 LAN のスキャン</h3>
+<p>すでに Wi-Fi 化した端末は、「LAN をスキャン」の <span class="ui">スキャン</span> で探して台帳に登録できます。範囲を空欄にすると、この Mac のサブネットを調べます。<code>192.168.10.0/24</code> のように指定することもできます。</p>
+
+<h3>5.4 端末台帳</h3>
+<p>端末タブの表で、端末ごとに次の項目を確認・編集できます。名前・IP・席・品質はその場で書き換えると保存されます。</p>
+<div class="table-wrap"><table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td>名前</td><td>表示名（例：Quest-01、座席番号）。タイル・録画ファイル名に使われます。</td></tr>
+  <tr><td>接続</td><td><span class="chip ok">Wi-Fi</span> <span class="chip ok">USB</span> <span class="chip warn">許可待ち</span> <span class="chip">接続中</span> <span class="chip bad">オフライン</span> <span class="chip bad">USB で再有効化が必要</span></td></tr>
+  <tr><td>IP</td><td>手で入力した IP には <span class="chip">固定</span> が付き、スキャンで上書きされません。</td></tr>
+  <tr><td>Wi-Fi</td><td>SSID・帯域・電波強度（dBm）</td></tr>
+  <tr><td>電池</td><td>残量（%）。充電中は ⚡ が付きます。</td></tr>
+  <tr><td>席(列,行)</td><td>モニター画面での位置（0 から数えます）。空欄なら自動で並べます。</td></tr>
+  <tr><td>品質</td><td>端末ごとの品質（<a href="#quality">7章</a>）</td></tr>
+  <tr><td>表示</td><td>ストリームの状態と、<span class="chip bad">REC</span>（録画中）・<span class="chip warn">黒画面</span> の表示</td></tr>
+  <tr><td>操作</td><td><span class="ui">接続</span>/<span class="ui">切断</span>、<span class="ui">表示</span>/<span class="ui">表示停止</span>、<span class="ui">削除</span>（台帳から削除）</td></tr>
+</table></div>
+
+<h3>5.5 TSV の読み込み・書き出し</h3>
+<p>「端末リスト（TSV）」の <span class="ui">書き出し</span> と <span class="ui">読み込み</span> で、CLI と同じ <code>scripts/quest_devices.tsv</code> 形式の台帳をやり取りできます。形式はタブ区切りで、<code>名前　IP:ポート　[列]　[行]</code> です。</p>
+<pre><code># alias	endpoint	[col]	[row]
+Quest-01	192.168.10.21:5555
+Quest-02	192.168.10.22:5555	1	0</code></pre>
+<p>読み込んだ端末は、まだ接続していなければ名前の下に「TSV（未接続）」と表示されます。初めて接続した時点で、本来の端末情報に統合されます。SSID などの Wi-Fi 情報は TSV に含まれません（<a href="#ssid">12章</a>の CSV を使ってください）。</p>
+
+<!-- 6 -->
+<h2 id="screen">6. 画面の見方</h2>
+<p>上部のタブで画面を切り替えます。右上には「接続 ○/○ · 表示 ○ · 録画 ○ · ビューワー公開中（○人）」の概要が出ます。</p>
+<div class="table-wrap"><table>
+  <tr><th>タブ</th><th>内容</th></tr>
+  <tr><td><span class="ui">モニター</span></td><td>表示中の全端末のグリッド、一括操作</td></tr>
+  <tr><td><span class="ui">端末</span></td><td>Wi-Fi 化、LAN スキャン、TSV、端末台帳</td></tr>
+  <tr><td><span class="ui">録画</span></td><td>録画の開始・停止、録画中の一覧、過去のセッション</td></tr>
+  <tr><td><span class="ui">ネットワーク</span></td><td>SSID の変更警告、SSID / アクセスポイント / 帯域ごとの台数。未確認の警告があると、タブに件数が出ます。</td></tr>
+  <tr><td><span class="ui">設定・ビューワー</span></td><td>ビューワーの公開、既定値、授業の終了</td></tr>
+</table></div>
+
+<h3>6.1 モニター（グリッド）</h3>
+<ul>
+  <li><span class="ui">全台表示</span>：接続中の全端末の表示を始めます。<span class="ui">全台停止</span>：すべての表示を止めます（録画中の端末があると止まりません）。</li>
+  <li><span class="ui">全台の品質</span>：全端末の品質を一度に変えます（録画中の端末は除きます）。</li>
+  <li><span class="ui">表示</span>：「全フレーム」か「キーフレームのみ（低fps）」を選びます。台数が多くて Mac が重いときは低fps にします。</li>
+  <li><span class="ui">列</span>：グリッドの列数。「自動」は台数に合わせます。</li>
+  <li>タイルをドラッグすると、座席（並び順）を入れ替えられます。</li>
+  <li>表示が追いつかないタイルは、自動で低fps に切り替わります（「表示が追いつかないため低fpsに切り替えました」と通知）。しきい値は設定の「自動で低fpsにする閾値（fps）」です。</li>
+</ul>
+<p>「接続したら自動で表示」が有効（既定）なら、Quest が接続されると自動で表示が始まります。</p>
+
+<h3>6.2 タイルの表示</h3>
+<div class="table-wrap"><table>
+  <tr><th>表示</th><th>意味</th></tr>
+  <tr><td>左下</td><td>端末名と品質</td></tr>
+  <tr><td><span class="chip bad">REC</span></td><td>録画中（タイルの枠も強調されます）</td></tr>
+  <tr><td><span class="chip warn">!</span></td><td>SSID の変更などの警告があります（ネットワークタブで確認）</td></tr>
+  <tr><td><span class="chip warn">黒画面</span></td><td>Quest 側で映像が黒くなっています。マウスを重ねると推定原因が出ます（<a href="#black">13章</a>）</td></tr>
+  <tr><td>○○%</td><td>電池残量</td></tr>
+  <tr><td>低fps</td><td>このタイルだけ低fps で表示しています</td></tr>
+  <tr><td>状態の文字</td><td>起動中 / 接続待ち / 再接続待ち / 品質変更中 / ネイティブ表示中 / 停止</td></tr>
+</table></div>
+
+<h3>6.3 拡大表示</h3>
+<p>タイルをクリックすると、その端末を大きく表示します。右側のボタンは次のとおりです。</p>
+<div class="table-wrap"><table>
+  <tr><th>ボタン</th><th>内容</th></tr>
+  <tr><td><span class="ui">音声を再生</span> / <span class="ui">音声を停止</span></td><td>この端末の音を Mac で再生します（<a href="#audio">8章</a>）</td></tr>
+  <tr><td><span class="ui">品質</span></td><td>この端末の品質を変えます</td></tr>
+  <tr><td><span class="ui">キーフレーム要求</span></td><td>映像が乱れたときに、すぐ新しい完全なフレームを送らせます</td></tr>
+  <tr><td><span class="ui">ネイティブ表示</span></td><td>scrcpy のウィンドウで開きます。キーボード・マウスで細かく操作したいときに使います（<a href="#input">10章</a>）</td></tr>
+  <tr><td><span class="ui">黒画面の診断</span></td><td>Quest の表示状態を記録し、推定原因を通知します（<a href="#black">13章</a>）</td></tr>
+  <tr><td>「画面クリックで操作」、BACK / HOME / WAKE / MENU、文字入力</td><td>入力操作（<a href="#input">10章</a>）</td></tr>
+  <tr><td><span class="ui">閉じる</span></td><td>グリッドに戻ります</td></tr>
+</table></div>
+<p>上部には状態・解像度・fps・SSID が表示されます。</p>
+
+<!-- 7 -->
+<h2 id="quality">7. 品質プリセットと帯域の目安</h2>
+<p>品質は3段階から選びます。既定は「標準」です。設定の「既定の品質」、端末ごとの「品質」、モニターの「全台の品質」で変更できます。</p>
+<div class="table-wrap"><table>
+  <tr><th>プリセット</th><th>長辺</th><th>fps</th><th>映像</th><th>1台あたり</th><th>10台</th><th>30台</th><th>50台</th></tr>
+  <tr><td>低（省帯域）</td><td>960px</td><td>15</td><td>1.5 Mbps</td><td>約1.68 Mbps</td><td>16.8 Mbps</td><td>50.4 Mbps</td><td><strong>84 Mbps</strong></td></tr>
+  <tr><td>標準</td><td>1280px</td><td>30</td><td>4 Mbps</td><td>約4.25 Mbps</td><td>42.5 Mbps</td><td>127.5 Mbps</td><td><strong>212.5 Mbps</strong></td></tr>
+  <tr><td>高（詳細）</td><td>1920px</td><td>60</td><td>10 Mbps</td><td>約10.43 Mbps</td><td>104.3 Mbps</td><td>312.9 Mbps</td><td><strong>521.5 Mbps</strong></td></tr>
+</table></div>
+<p>帯域は計画用の上限の目安です（映像の上限 + 音声 0.128 Mbps + 通信の余分 約3%）。動きの少ないメニュー画面では、これよりずっと少なくなります（実測で標準は約 0.6 Mbps）。</p>
+<div class="note">
+<p><strong>選び方の目安</strong></p>
+<ul>
+  <li>50台を1つのネットワークで扱う → 「低」または「標準」。アクセスポイントを複数台に分け、Mac は有線 LAN で接続します。</li>
+  <li>特定の数台を詳しく見たい → その端末だけ「高」にします。</li>
+  <li>録画の画質も同じ品質になります。録画中は品質を変更できません。</li>
+</ul>
+</div>
+<p>品質を変えると、その端末のストリームが1秒ほど途切れてから再開します（状態は「品質変更中」）。</p>
+
+<!-- 8 -->
+<h2 id="audio">8. 音声</h2>
+<ul>
+  <li>音声は Quest の再生音（Opus、128kbps）を取得します。設定「音声を取得」で無効にできます。</li>
+  <li>「ヘッドセットの音も残す（audio_dup）」が有効（既定）なら、Quest のスピーカーからも音が出たままになります。</li>
+  <li>Mac で聞けるのは、<strong>拡大表示中の1台だけ</strong>です。拡大表示の <span class="ui">音声を再生</span> を押してください（ブラウザの仕様で、クリックしないと再生できません）。</li>
+  <li>録画には、表示していない端末も含めて音声が入ります。</li>
+  <li>端末が音声の取得に対応していない場合は、映像だけで表示し、警告を出します。</li>
+</ul>
+
+<!-- 9 -->
+<h2 id="recording">9. 録画</h2>
+<h3>9.1 開始と停止（「録画」タブ）</h3>
+<ol>
+  <li>セッション名を入力します（例：<code>2026-11-lesson01</code>）。空欄なら日時になります。</li>
+  <li><span class="ui">表示中の全台を録画</span>、または一覧で端末を選んで <span class="ui">選択した端末を録画</span> を押します。</li>
+  <li>止めるときは <span class="ui">すべて停止</span>、または「録画中」の表の各行の <span class="ui">停止</span> で個別に止めます。</li>
+</ol>
+<p>録画できるのは表示中の端末です。「録画中」の表には、経過時間・サイズ・分割数・ファイル名が出ます。「過去のセッション」には、これまでの録画の一覧が出ます。</p>
+
+<h3>9.2 保存場所とファイル</h3>
+<pre><code>recordings/&lt;セッション名&gt;/
+  &lt;名前&gt;_&lt;シリアル末尾6桁&gt;_&lt;YYYYmmdd-HHMMSS&gt;.mkv
+  &lt;名前&gt;_&lt;シリアル末尾6桁&gt;_&lt;YYYYmmdd-HHMMSS&gt;_part02.mkv   ← 分割されたとき
+  session.json                                                ← 端末・IP・SSID・時刻の記録</code></pre>
+<ul>
+  <li>保存先は設定「録画の保存先」で変更できます（既定はリポジトリの <code>recordings/</code>）。</li>
+  <li>形式は <strong>MKV（映像 H.264 + 音声 Opus）</strong>です。再エンコードせず、届いたデータをそのまま保存します。VLC などで再生できます。</li>
+  <li>同じセッション名がすでにある場合は、<code>名前_2</code> のように新しいフォルダを作ります。以前の録画は上書きしません。</li>
+  <li>接続が途切れて再接続しても、同じファイルに続けて書きます。</li>
+  <li><strong>パート分割</strong>：解像度や映像の設定が変わったとき（品質の変更、Quest 側の画面サイズの変化など）は、<code>_part02</code>、<code>_part03</code> … の新しいファイルに続けて書きます。</li>
+</ul>
+
+<h3>9.3 録画中の制限</h3>
+<ul>
+  <li>録画中の端末は、品質の変更・<span class="ui">表示停止</span>・<span class="ui">切断</span>・<span class="ui">全台停止</span>・ネイティブ表示ができません（録画が気づかないうちに途切れないようにするため）。先に録画を止めてください。</li>
+  <li>空き容量が「録画を止める空き容量（GB）」（既定 5GB）を下回ると、自動で録画を止めて通知します。</li>
+</ul>
+<div class="warn"><p>50台を「標準」で録画すると、最大で毎時およそ 95GB になります（212.5 Mbps × 3600 秒 ÷ 8）。実際は画面の動きに応じて少なくなりますが、空き容量に余裕を持たせてください。</p></div>
+
+<!-- 10 -->
+<h2 id="input">10. 入力操作</h2>
+<h3>10.1 一括操作（モニター）</h3>
+<p>モニターの「一括:」にある <span class="ui">HOME</span> <span class="ui">BACK</span> <span class="ui">WAKE</span> を押すと、表示中の全端末に同じキーを送ります。</p>
+
+<h3>10.2 1台の操作（拡大表示）</h3>
+<ul>
+  <li>「画面クリックで操作」にチェックを入れると、映像をクリック・ドラッグした位置にタッチを送ります。</li>
+  <li><span class="ui">BACK</span> <span class="ui">HOME</span> <span class="ui">WAKE</span> <span class="ui">MENU</span>：キーを送ります。</li>
+  <li>文字入力欄に入力して <span class="ui">送信</span>：文字を入力します（テキスト欄にフォーカスがあるとき）。</li>
+</ul>
+<div class="note"><p>VR の 3D 画面では、タップが効かないことがあります。その場合は <span class="ui">ネイティブ表示</span> で scrcpy のウィンドウを開いて操作してください。ネイティブ表示の間、その端末の Quest Hub 側のキャプチャは一時停止し（「ネイティブ表示中」）、ウィンドウを閉じると再開します。ネイティブ表示では音声は出ません。</p></div>
+<p>ビューワー（閲覧用の端末）からは操作できません。</p>
+
+<!-- 11 -->
+<h2 id="viewer">11. ブラウザビューワー</h2>
+<p>PC・Android・iPad などのブラウザで、表示中の端末を閲覧できます。一覧は低fps（キーフレームのみ）で表示して負荷を抑えます。タイルをクリックすると、その1台をフレームレートを落とさずに表示し、音声も再生できます。</p>
+
+<h3>11.1 公開する</h3>
+<ol>
+  <li><span class="ui">設定・ビューワー</span> タブで「ビューワーを公開する」をオンにします。</li>
+  <li>6桁の <strong>アクセスコード</strong>、URL（<code>https://&lt;Mac の IP&gt;:8443/</code>）、QR コード（ビューワー・証明書の導入ページ）が表示されます。</li>
+  <li>閲覧する人に QR コードか URL とアクセスコードを伝えます。</li>
+</ol>
+<ul>
+  <li><span class="ui">変更（全員ログアウト）</span>：アクセスコードを変更し、ログイン中の全員をログアウトさせます。</li>
+  <li>右上の「ビューワー公開中（○人）」で視聴者数が分かります。</li>
+  <li>拡大表示できるのは、視聴者1人につき1台、全体で8台までです。</li>
+  <li>ビューワーには端末の IP・SSID は表示されません。</li>
+</ul>
+
+<h3>11.2 証明書の導入（閲覧する端末ごとに1回）</h3>
+<p>ビューワーは HTTPS で通信します。Quest Hub は最初にこの Mac 専用の証明書（Quest Hub Local CA）を作ります。閲覧する端末は、その証明書を信頼済みとして1回だけ登録します。証明書の導入ページ（<code>http://&lt;Mac の IP&gt;:8766/</code>、QR あり）を開き、手順に従ってください。</p>
+<div class="cols">
+  <div class="card">
+    <h3>iPad / iPhone（Safari）</h3>
+    <ol>
+      <li>「構成プロファイルをダウンロード」を押し、「許可」を選ぶ</li>
+      <li>設定アプリ ＞「プロファイルがダウンロードされました」＞ インストール</li>
+      <li>設定 ＞ 一般 ＞ 情報 ＞ 証明書信頼設定 で「Quest Hub Local CA」をオン</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h3>Android（Chrome）</h3>
+    <ol>
+      <li>「CA 証明書をダウンロード」を押す</li>
+      <li>設定 ＞ セキュリティ ＞ 暗号化と認証情報 ＞ 証明書のインストール ＞ CA 証明書</li>
+      <li>ダウンロードした QuestHubLocalCA.crt を選ぶ</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h3>Mac（Chrome / Safari）</h3>
+    <ol>
+      <li>証明書をダウンロードして開き、キーチェーン「ログイン」に追加</li>
+      <li>キーチェーンアクセスで「Quest Hub Local CA」を開き、「信頼」＞「常に信頼」</li>
+    </ol>
+  </div>
+  <div class="card">
+    <h3>Windows（Chrome / Edge）</h3>
+    <ol>
+      <li>証明書（.cer）をダウンロードして開き、「証明書のインストール」</li>
+      <li>「証明書をすべて次のストアに配置する」＞「信頼されたルート証明機関」</li>
+    </ol>
+  </div>
+</div>
+<div class="warn"><p>導入前に、ページに表示される<strong>指紋（SHA-256）</strong>が管理画面の「指紋」と同じであることを確認してください。違う場合は導入しないでください。</p></div>
+
+<h3>11.3 閲覧する</h3>
+<ol>
+  <li>ビューワーの URL を開き、アクセスコード（6桁）を入力して <span class="ui">開く</span> を押します。</li>
+  <li>一覧が表示されます。<span class="ui">列</span> で列数を変えられます。</li>
+  <li>タイルをクリックすると拡大表示します。<span class="ui">音声を再生</span> で音が出ます。</li>
+  <li>終わったら <span class="ui">ログアウト</span> を押します。</li>
+</ol>
+<p>「このブラウザは WebCodecs（映像デコード）に対応していないか…」と出る場合は、ブラウザを最新版にするか、証明書の導入と HTTPS での接続を確認してください。</p>
+
+<!-- 12 -->
+<h2 id="ssid">12. SSID の変更警告</h2>
+<ul>
+  <li>どの SSID でも動作します。端末ごとに SSID が違っても構いません。</li>
+  <li>端末が接続したときの SSID を基準にし、<strong>稼働中に SSID が変わると警告</strong>します（通知、タイルの <span class="chip warn">!</span>、ネットワークタブの件数）。</li>
+  <li>Wi-Fi 情報が読めなくなった場合も「Wi-Fi情報を取得できません」と警告します。</li>
+  <li>警告はネットワークタブで <span class="ui">確認</span> を押すまで残ります。確認すると、その時点の SSID が新しい基準になります。</li>
+</ul>
+<p>ネットワークタブでは、SSID・アクセスポイント（BSSID）・帯域ごとの台数が分かります。電波が弱い（-70dBm 未満）端末と、2.4GHz で接続している端末も表示します。1台のアクセスポイントに端末が偏っていないか、授業前に確認してください。<span class="ui">Wi-Fi 情報を CSV で書き出し</span> で一覧を保存できます。</p>
+<p>Wi-Fi 情報は「計測間隔（秒）」（既定 60 秒）ごとに更新します。電池残量も同じ間隔です。</p>
+
+<!-- 13 -->
+<h2 id="black">13. 黒画面の検出・復旧・診断</h2>
+<p>Quest では、エラーが出ないまま映像だけが真っ黒になることがあります。Quest の画面キャプチャは、Meta のコンポジター（VR の映像を合成する仕組み）の「録画」を経由しています。そのため、コンポジターが録画先に描画しない状態になると黒くなります。</p>
+<p class="note">装着中のテストでは、<strong>Meta ボタンのメニューを開いたとき</strong>と、<strong>ブラウザなどのアプリを起動した直後</strong>に、10〜20秒ほど黒くなりました。これは Meta が意図的に録画を止めているもので、毎回自然に戻ります。授業では、この間は映像が途切れることを講師・TA に伝えておいてください。クイック設定や設定アプリの表示中は黒くなりませんでした。</p>
+
+<h3>13.1 主な原因</h3>
+<div class="table-wrap"><table>
+  <tr><th>原因</th><th>対処</th></tr>
+  <tr><td>Meta が一時的に録画を止めている（メニューを開いた・アプリの起動直後）</td><td>10〜20秒ほどで自然に戻ります。この間、Quest Hub は復旧を行わずに待ちます（確認済み）</td></tr>
+  <tr><td>ヘッドセットを装着していない（近接センサー）</td><td>自動復旧で「装着中」扱いにすると戻ります（確認済み）</td></tr>
+  <tr><td>スリープ・画面オフ</td><td>自動復旧で画面を起こします</td></tr>
+  <tr><td>保護されたレイヤーの表示中</td><td>Meta が録画を禁止しているため戻りません</td></tr>
+  <tr><td>画面の切り替え中など</td><td>キャプチャの作り直しやサーバーの再起動で戻ることがあります</td></tr>
+</table></div>
+
+<h3>13.2 Quest Hub の動作</h3>
+<ol>
+  <li><strong>検出</strong>：映像がほぼ真っ黒の状態が3秒続くと黒画面と判定し、タイルと端末一覧に <span class="chip warn">黒画面</span> を表示し、推定原因を通知します。暗い場面を誤って判定しないよう、映像の明るい部分で判断します。</li>
+  <li><strong>自動復旧</strong>：黒画面が続く間、次の順に試します（1分に1回まで繰り返します）。
+    <ol>
+      <li>すぐに：キャプチャを作り直す</li>
+      <li>6秒後：画面を起こし、「装着中」扱いにする</li>
+      <li>12秒後：Quest 側のサーバーを再起動する</li>
+    </ol>
+    映像が戻ると「映像が戻りました（キャプチャ再作成 / 画面の再起動 / サーバー再起動 で復旧）」と通知します。<br>
+    ただし、Meta が録画を止めている間は、これらを行わずに待ちます（効果がないため）。止まった状態が45秒を超えた場合や、止まった状態が終わっても黒いままの場合は、上の順に試します。</li>
+  <li><strong>診断ログ</strong>：黒画面を検出すると、Quest の表示状態（コンポジター、前面のアプリ、電源、近接センサー、ディスプレイ）を <code>~/.questhub/diagnostics/black_&lt;シリアル&gt;_&lt;日時&gt;.txt</code> に保存します。</li>
+</ol>
+<p>黒いのに検出されない場合は、拡大表示の <span class="ui">黒画面の診断</span> を押してください。その時点の状態を <code>manual_&lt;シリアル&gt;_&lt;日時&gt;.txt</code> に記録し、推定原因を通知します。不具合の報告にはこのファイルを添えてください。</p>
+
+<h3>13.3 設定</h3>
+<ul>
+  <li>「黒画面（Quest 側）を検出する」</li>
+  <li>「黒画面から自動で復旧を試みる」</li>
+  <li>「復旧時に「装着中」扱いにする（prox_close）」</li>
+</ul>
+<p>いずれも既定で有効です。ビューワーでも該当するタイルに「黒画面（Quest 側）」と表示します。</p>
+
+<div class="danger">
+<p><strong>近接センサーの戻し忘れに注意</strong></p>
+<p>「装着中」扱い（<code>prox_close</code>）にしたヘッドセットは、元に戻すまで画面が消えず、自動スリープもしません。Quest Hub は、復旧でこれを使った端末を、表示停止・<span class="ui">授業を終了</span>・Quest Hub の終了時に自動で元に戻します。</p>
+<p>Quest Hub が異常終了した場合や、CLI を使った場合は、次のコマンドで戻してください。</p>
+<pre><code>./scripts/quest_os_tweaks.sh restore</code></pre>
+<p>戻ったかどうかは、<code>adb shell dumpsys vrpowermanager | grep 'proximity state'</code> が <code>DISABLED</code> になっていることで確認できます。</p>
+</div>
+
+<!-- 14 -->
+<h2 id="checklist">14. 授業の流れのチェックリスト</h2>
+<div class="cols">
+<div class="card">
+<h3>前日まで</h3>
+<ul class="checklist">
+  <li><code>./install.sh --doctor</code> がすべて OK</li>
+  <li>全台の開発者モードと「USB デバッグを常に許可」</li>
+  <li>全台を Wi-Fi 化し、台帳に名前（座席番号）と席を登録</li>
+  <li>ルーターで DHCP 予約（IP 固定）</li>
+  <li>アクセスポイントを複数台用意し、台数を分散</li>
+  <li>閲覧用の端末に証明書を導入</li>
+  <li>録画の保存先の空き容量を確認</li>
+</ul>
+</div>
+<div class="card">
+<h3>開始前（15分前）</h3>
+<ul class="checklist">
+  <li>Quest を充電（80% 以上）</li>
+  <li><code>./questhub.command</code> で起動</li>
+  <li>端末タブで全台が <span class="chip ok">Wi-Fi</span>。オフラインの端末は Wi-Fi を入れ直す</li>
+  <li>ネットワークタブで SSID・アクセスポイントの偏り・電波の弱い端末を確認</li>
+  <li>台数に合わせて品質を選ぶ（<a href="#quality">7章</a>）</li>
+  <li>タイルの名前と座席表を照合</li>
+  <li>必要ならビューワーを公開し、QR を投影</li>
+</ul>
+</div>
+<div class="card">
+<h3>授業中</h3>
+<ul class="checklist">
+  <li>録画タブでセッション名を付けて録画開始</li>
+  <li>通知（SSID 変更、黒画面、ディスク不足）を確認</li>
+  <li>重い場合は表示を「キーフレームのみ（低fps）」に</li>
+  <li>SSID 警告は原因を確認してから <span class="ui">確認</span></li>
+</ul>
+</div>
+<div class="card">
+<h3>終了時</h3>
+<ul class="checklist">
+  <li><span class="ui">設定・ビューワー</span> ＞ <span class="ui">授業を終了</span>（録画停止・ビューワー停止・表示停止）</li>
+  <li>端末を持ち出す場合は「全端末の Wi-Fi ADB を無効化する」にチェック（次回は USB 接続が必要）</li>
+  <li>録画タブの「過去のセッション」でファイルを確認</li>
+  <li><kbd>Ctrl</kbd>+<kbd>C</kbd> で Quest Hub を終了</li>
+</ul>
+</div>
+</div>
+<p><span class="ui">授業を終了</span> の後は、Quest が接続されても自動では表示しません。再開するときは <span class="ui">全台表示</span> か、端末ごとの <span class="ui">表示</span> を押してください。</p>
+
+<!-- 15 -->
+<h2 id="trouble">15. トラブルシューティング</h2>
+<div class="table-wrap"><table>
+  <tr><th>症状</th><th>確認・対処</th></tr>
+  <tr><td>接続が <span class="chip warn">許可待ち</span> のまま</td><td>ヘッドセット内の「USB デバッグを許可」で「常に許可」を選びます。</td></tr>
+  <tr><td><span class="chip bad">オフライン</span></td><td>Quest の電源・スリープ、Wi-Fi 接続、IP の変化を確認します。Quest の Wi-Fi を一度切って入れ直すと戻ることがよくあります。IP が変わった場合は台帳の IP を直すか、スキャンします。</td></tr>
+  <tr><td><span class="chip bad">USB で再有効化が必要</span></td><td>Quest の再起動などで Wi-Fi ADB が無効になりました。USB でつないで Wi-Fi 化し直します。</td></tr>
+  <tr><td>接続が <code>No route to host</code> で失敗する（macOS 15 以降）</td><td>ターミナルの「ローカルネットワーク」許可を確認します（<a href="#install">3章</a>）。ゲスト隔離のある Wi-Fi も原因になります。</td></tr>
+  <tr><td>スキャンで見つからない</td><td>Wi-Fi 化が済んでいるか、Mac と同じサブネットか確認します。範囲を指定して再スキャンします。</td></tr>
+  <tr><td>映像が真っ黒</td><td><a href="#black">13章</a>を参照します。通知の推定原因を確認し、検出されない場合は <span class="ui">黒画面の診断</span> を押します。</td></tr>
+  <tr><td>映像が乱れる・止まる</td><td>拡大表示で <span class="ui">キーフレーム要求</span>。続く場合は品質を下げ、電波強度とアクセスポイントの偏りを確認します。</td></tr>
+  <tr><td>グリッドがカクつく・Mac が重い</td><td>表示を「キーフレームのみ（低fps）」にするか、品質を下げます。</td></tr>
+  <tr><td>音が出ない</td><td>拡大表示で <span class="ui">音声を再生</span> を押したか、設定の「音声を取得」が有効か確認します。</td></tr>
+  <tr><td>表示停止・切断・品質変更ができない</td><td>録画中です。先に録画を止めます。</td></tr>
+  <tr><td>録画が止まった</td><td>空き容量が設定値を下回りました。保存先を変えるか、空きを増やします。</td></tr>
+  <tr><td>タップが効かない</td><td>VR の 3D 画面ではタップが効かないことがあります。<span class="ui">ネイティブ表示</span> を使います。</td></tr>
+  <tr><td>ビューワーが開けない・証明書の警告が出る</td><td>証明書を導入し、「信頼」をオンにしたか確認します（iPad は「証明書信頼設定」が必要です）。管理画面のビューワーの状態に「起動できません」と出ていないかも確認します。</td></tr>
+  <tr><td>ビューワーでログインできない</td><td>アクセスコードを確認します。コードを変更すると、全員が再ログインになります。</td></tr>
+  <tr><td>Meta のメニューを操作すると映像が点滅する</td><td>Horizon OS の既知の問題です。操作後も続く場合は、その端末の表示を停止して再開します。</td></tr>
+  <tr><td>ヘッドセットの画面が消えない・スリープしない</td><td>近接センサーが「装着中」のままです。<code>./scripts/quest_os_tweaks.sh restore</code> で戻します（<a href="#black">13章</a>）。</td></tr>
+  <tr><td>「すでに起動しています」と出る</td><td>Quest Hub が起動中です。表示された URL を開きます。</td></tr>
+</table></div>
+
+<!-- 16 -->
+<h2 id="cli">16. CLI との関係</h2>
+<p>リポジトリには、scrcpy のウィンドウを1台ずつ並べる従来の CLI（<code>scripts/quest_multi_scrcpy.sh</code> など）も含まれています。使い方は <code>agents.md</code> と <code>README.md</code> にあります。</p>
+<div class="danger"><p><strong>同じ端末に GUI と CLI を同時に使わないでください。</strong>1台のヘッドセットを2重にキャプチャすると、Quest の負荷が2倍になります。CLI は、Quest Hub の起動中に実行すると警告を出します。</p></div>
+<ul>
+  <li>端末台帳は TSV（<code>scripts/quest_devices.tsv</code>）で共用できます（<a href="#setup">5.5</a>）。</li>
+  <li>CLI の品質プリセット（<code>--quality low|standard|high</code>）は GUI と同じ値です。</li>
+  <li>CLI の <code>--quest-tweaks</code> で近接センサーを「装着中」にした場合は、終了後に <code>./scripts/quest_os_tweaks.sh restore</code> で戻してください。</li>
+</ul>
+
+<!-- Appendix -->
+<h2 id="appendix">付録（開発者・保守担当者向け）</h2>
+<h3>A. データの保存場所</h3>
+<div class="table-wrap"><table>
+  <tr><th>場所</th><th>内容</th></tr>
+  <tr><td><code>~/.questhub/settings.json</code></td><td>設定</td></tr>
+  <tr><td><code>~/.questhub/devices.sqlite</code></td><td>端末台帳と観測履歴</td></tr>
+  <tr><td><code>~/.questhub/tls/</code></td><td>ローカル CA とサーバー証明書（秘密鍵は権限 600）</td></tr>
+  <tr><td><code>~/.questhub/diagnostics/</code></td><td>黒画面の診断ログ</td></tr>
+  <tr><td><code>recordings/</code></td><td>録画（設定で変更可）</td></tr>
+</table></div>
+
+<h3>B. ポート</h3>
+<div class="table-wrap"><table>
+  <tr><th>ポート</th><th>用途</th><th>公開範囲</th></tr>
+  <tr><td>8765</td><td>管理画面（HTTP）</td><td>この Mac のみ</td></tr>
+  <tr><td>8443</td><td>ビューワー（HTTPS）</td><td>LAN（公開時のみ）</td></tr>
+  <tr><td>8766</td><td>証明書の導入ページ（HTTP）</td><td>LAN（公開時のみ）</td></tr>
+  <tr><td>5555</td><td>Quest の Wi-Fi ADB</td><td>Quest 側</td></tr>
+</table></div>
+<p>ビューワーと証明書ページのポートは設定で変更できます。</p>
+
+<h3>C. 設定項目の一覧（「既定値」）</h3>
+<div class="table-wrap"><table>
+  <tr><th>項目</th><th>既定</th></tr>
+  <tr><td>既定の品質</td><td>標準</td></tr>
+  <tr><td>接続したら自動で表示</td><td>有効</td></tr>
+  <tr><td>音声を取得</td><td>有効</td></tr>
+  <tr><td>ヘッドセットの音も残す（audio_dup）</td><td>有効</td></tr>
+  <tr><td>表示開始時に画面を起こす</td><td>有効</td></tr>
+  <tr><td>Quest OS 対策（近接センサー・Guardian）</td><td>無効</td></tr>
+  <tr><td>計測間隔（秒）</td><td>60</td></tr>
+  <tr><td>自動で低fpsにする閾値（fps）</td><td>20</td></tr>
+  <tr><td>黒画面（Quest 側）を検出する</td><td>有効</td></tr>
+  <tr><td>黒画面から自動で復旧を試みる</td><td>有効</td></tr>
+  <tr><td>復旧時に「装着中」扱いにする（prox_close）</td><td>有効</td></tr>
+  <tr><td>録画の保存先</td><td>リポジトリの <code>recordings/</code></td></tr>
+  <tr><td>録画を止める空き容量（GB）</td><td>5</td></tr>
+  <tr><td>ビューワーのポート / 証明書ページのポート</td><td>8443 / 8766</td></tr>
+  <tr><td>開発用: ビューワーを HTTP で公開</td><td>無効（localhost での確認専用。授業では使わないでください）</td></tr>
+</table></div>
+<p>変更したら <span class="ui">保存</span> を押してください。</p>
+
+<h3>D. テストと設計資料</h3>
+<pre><code>./.mamba-env/bin/python -m unittest discover -s tests -v</code></pre>
+<p>設計の詳細は <code>docs/GUI_DESIGN.md</code>、CLI の運用は <code>agents.md</code> を参照してください。</p>
+</main>
+</div>
+<script>
+(function () {
+  var root = document.documentElement;
+  try { var t = localStorage.getItem('qh-manual-theme'); if (t) root.setAttribute('data-theme', t); } catch (e) {}
+  document.querySelectorAll('[data-set-theme]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-set-theme');
+      if (v) root.setAttribute('data-theme', v); else root.removeAttribute('data-theme');
+      try { if (v) localStorage.setItem('qh-manual-theme', v); else localStorage.removeItem('qh-manual-theme'); } catch (e) {}
+    });
+  });
+})();
+</script>
+</body>
+</html>

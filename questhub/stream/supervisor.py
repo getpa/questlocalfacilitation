@@ -73,6 +73,7 @@ class StreamSupervisor:
         self.last_recovery: str | None = None
         self._recovery_task: asyncio.Task | None = None
         self.prox_nudged = False               # recovery forced "worn"; release it when done
+        self.meta_paused = False               # Meta is withholding the recording (flag 0x80)
 
     # ------------------------------------------------------------ lifecycle
 
@@ -201,20 +202,53 @@ class StreamSupervisor:
             self._recovery_task.cancel()
         self._recovery_task = None
 
+    def _within_pause_grace(self) -> bool:
+        since = self.black.since or time.monotonic()
+        return time.monotonic() - since < blackscreen.META_PAUSE_GRACE
+
+    async def _meta_paused_now(self) -> bool:
+        target = self.target_fn()
+        if not target:
+            return False
+        try:
+            out = await self.adb.for_serial(target).shell(blackscreen.DIAG_COMMANDS[0][1], timeout=10, check=False)
+        except Exception:
+            return False
+        return blackscreen.recording_paused(out)
+
+    async def _wait_while_meta_paused(self) -> bool:
+        """Do not fight Meta's own recording pause; returns True if it waited."""
+        waited = False
+        while self.black.black and self._within_pause_grace() and await self._meta_paused_now():
+            if not self.meta_paused:
+                self.meta_paused = True
+                self.black_cause = blackscreen.META_PAUSED_CAUSE
+                self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, meta_paused=True,
+                                 cause=blackscreen.META_PAUSED_CAUSE)
+            waited = True
+            await asyncio.sleep(blackscreen.META_PAUSE_POLL)
+        self.meta_paused = False
+        return waited
+
     async def _recover(self) -> None:
         while self.black.black:
+            if await self._wait_while_meta_paused():
+                continue
             started = time.monotonic()
             for delay, step in blackscreen.RECOVERY_STEPS:
                 await asyncio.sleep(max(0.0, started + delay - time.monotonic()))
                 if not self.black.black:
                     return
+                if self._within_pause_grace() and await self._meta_paused_now():
+                    break                      # Meta paused the recording meanwhile: wait again
                 try:
                     await self._recovery_step(step)
                     self.last_recovery = step
                     self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, recovery=step)
                 except Exception as exc:
                     log.warning("%s: recovery %s failed: %s", self.serial, step, exc)
-            await asyncio.sleep(max(0.0, started + blackscreen.RECOVERY_REPEAT - time.monotonic()))
+            else:
+                await asyncio.sleep(max(0.0, started + blackscreen.RECOVERY_REPEAT - time.monotonic()))
 
     async def _recovery_step(self, step: str) -> None:
         target = self.target_fn()
@@ -320,5 +354,6 @@ class StreamSupervisor:
             "black_cause": self.black_cause if self.black.black else None,
             "black_events": self.black_events,
             "last_recovery": self.last_recovery,
+            "meta_paused": self.meta_paused if self.black.black else False,
             "luma": round(self.black.last_luma.mean, 1) if self.black.last_luma else None,
         }

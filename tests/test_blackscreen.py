@@ -22,6 +22,9 @@ ovrState: 0x0 (passthrough: 0, scaling: 0, cac: 0, scaleFactor: 0)
 """
 
 
+STRATA_PAUSED = STRATA_NORMAL.replace("zOrder: 2147483646, flags: 0x0", "zOrder: 2147483646, flags: 0x80")
+
+
 class DetectionLogicTests(unittest.TestCase):
     def test_hysteresis(self):
         state = BlackState(confirm_s=3.0)
@@ -46,8 +49,16 @@ class DetectionLogicTests(unittest.TestCase):
         self.assertEqual((s["strata_layer"], s["passthrough"], s["protected"], s["wakefulness"]), ("S2", False, False, "Awake"))
         self.assertEqual(s["resumed"], ["com.oculus.browser/.BrowserActivity"])
         self.assertIn("描画していない", blackscreen.likely_cause(s))
+        self.assertEqual(s["layer_flags"], "0x0")
+        self.assertFalse(s["recording_paused"])
         passthrough = STRATA_NORMAL.replace("passthrough: 0", "passthrough: 1")
-        self.assertIn("パススルー", blackscreen.likely_cause(blackscreen.summarize_diagnostics({"compositor": passthrough})))
+        self.assertNotIn("パススルー", blackscreen.likely_cause(blackscreen.summarize_diagnostics({"compositor": passthrough})),
+                         "passthrough: 1 also occurs with a normal picture")
+        paused = STRATA_PAUSED.replace("passthrough: 0", "passthrough: 1")
+        s = blackscreen.summarize_diagnostics({"compositor": paused})
+        self.assertTrue(s["recording_paused"])
+        self.assertTrue(blackscreen.recording_paused(paused))
+        self.assertEqual(blackscreen.likely_cause(s), blackscreen.META_PAUSED_CAUSE)
         protected = STRATA_NORMAL.replace(" -> S2: 'vr_compositor_4128x2208'", " -  S2: 'vr_compositor_4128x2208'") \
             .replace(" -  S3: 'vr_compositor_protected", " -> S3: 'vr_compositor_protected")
         self.assertIn("保護", blackscreen.likely_cause(blackscreen.summarize_diagnostics({"compositor": protected})))
@@ -133,6 +144,64 @@ class SupervisorRecoveryTests(unittest.TestCase):
         self.assertEqual(events[-1]["data"].get("recovered_by"), "restart")
         self.assertIn("am broadcast -a com.oculus.vrpowermanager.automation_disable", shell,
                       "the forced 'worn' state is released when the stream stops")
+
+
+    def test_meta_pause_waits_instead_of_escalating(self):
+        from questhub.core.events import EventBus
+        from questhub.stream import supervisor as supmod
+        from questhub.stream.scrcpy_server import StreamOptions
+        from tests.fakes import FakeAdbWorld, FakeHeadset
+        from tests.test_services_media import FakeFactory
+
+        video, audio = make_h264(frames=60, gop=5), make_opus(packets=100)
+        brightness = {"value": FrameLuma(0.0, 0.0)}
+
+        class FakeProbe:
+            def measure(self, config, key_frame):
+                return brightness["value"]
+
+        async def scenario():
+            headset = FakeHeadset("S1", "10.0.0.1")
+            headset.shell_output["Strata composer"] = STRATA_PAUSED
+            world = FakeAdbWorld([headset])
+            bus = EventBus()
+            factory = FakeFactory(video, audio, realtime=True)
+            sup = supmod.StreamSupervisor("S1", lambda: "10.0.0.1:5555", bus, StreamOptions.from_preset("standard"),
+                                          adb=world.adb(), wake=False, black_detection=True,
+                                          probe_factory=FakeProbe)
+            sup.black.confirm_s = 0.2
+            sup._server_factory = factory(sup)
+            with mock.patch.object(blackscreen, "RECOVERY_STEPS", ((0.0, "reset_video"), (0.1, "wake"), (0.2, "restart"))), \
+                    mock.patch.object(blackscreen, "META_PAUSE_POLL", 0.05):
+                sup.start()
+                await sup.wait_streaming(10)
+                for _ in range(100):
+                    if sup.meta_paused:
+                        break
+                    await asyncio.sleep(0.05)
+                await asyncio.sleep(0.6)
+                paused_status = sup.status()
+                steps_while_paused = sup.last_recovery
+                # Meta ends the pause but the picture stays black: escalation resumes.
+                headset.shell_output["Strata composer"] = STRATA_NORMAL
+                for _ in range(100):
+                    if sup.last_recovery == "restart":
+                        break
+                    await asyncio.sleep(0.05)
+                escalated = sup.last_recovery
+                brightness["value"] = FrameLuma(100.0, 220.0)
+                await asyncio.sleep(0.3)
+            await sup.stop()
+            await factory.close()
+            events = [e for e in bus.recent(300) if e["type"] == "media_black"]
+            return paused_status, steps_while_paused, escalated, events, factory.control
+        paused_status, steps_while_paused, escalated, events, control = asyncio.run(scenario())
+        self.assertTrue(paused_status["black"])
+        self.assertTrue(paused_status["meta_paused"])
+        self.assertEqual(paused_status["black_cause"], blackscreen.META_PAUSED_CAUSE)
+        self.assertIsNone(steps_while_paused, "no reset/wake/restart while Meta pauses the recording")
+        self.assertTrue(any(e["data"].get("meta_paused") for e in events))
+        self.assertEqual(escalated, "restart")
 
 
 if __name__ == "__main__":

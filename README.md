@@ -214,7 +214,7 @@ The viewer (`https://<mac-ip>:8443/`) shows a low-fps key-frame grid. Clicking a
 
 The CLI launcher warns when it is started while the GUI is running, because capturing a headset twice doubles its load.
 
-Black capture: on Horizon OS the stream comes from Meta's compositor recording, which can turn completely black, for example when the headset is not worn, during passthrough, or with protected layers. The GUI detects this from key frames and marks the tile “黒画面”. It then tries to recover in steps: it recreates the capture, wakes the headset and marks it as worn (`prox_close`), and finally restarts the server. It also saves a diagnostic snapshot with the likely cause to `~/.questhub/diagnostics/`. See `docs/GUI_DESIGN.md` §4.10.
+Black capture: on Horizon OS the stream comes from Meta's compositor recording, which can turn completely black. Worn tests showed that Meta pauses the recording for about 8–20 s when the Meta-button menu opens or an app such as the browser starts; the active compositor layer then has flag `0x80`, and the picture always comes back by itself. It can also turn black when the headset is not worn or with protected layers. The GUI detects this from key frames and marks the tile “黒画面”. While Meta pauses the recording it waits; otherwise it tries to recover in steps: it recreates the capture, wakes the headset and marks it as worn (`prox_close`), and finally restarts the server. It also saves a diagnostic snapshot with the likely cause to `~/.questhub/diagnostics/`. See `docs/GUI_DESIGN.md` §4.10.
 
 ## Quest Hub PoC (single headset)
 

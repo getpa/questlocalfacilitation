@@ -15,6 +15,7 @@ RESET_VIDEO), so the cost is small even for 50 headsets.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 import time
 
 DEFAULT_THRESHOLD = 16.0        # 99th-percentile luma below this = black frame
@@ -88,6 +89,17 @@ RECOVERY_STEPS = (
 )
 RECOVERY_REPEAT = 60.0        # start over at most once a minute while still black
 
+# Meta withholds the compositor recording on purpose for a while (verified worn,
+# 2026-11-24: opening the Meta-button menu and launching apps such as the
+# browser). The active Strata layer then carries flag 0x80 and every recorded
+# frame is black for ~8-20 s; it always came back by itself, and re-creating the
+# capture does not help. Recovery waits instead of escalating, up to a grace
+# period in case the headset is stuck in that state.
+RECORDING_PAUSED_FLAG = 0x80
+META_PAUSE_GRACE = 45.0
+META_PAUSE_POLL = 3.0
+_FLAGS = re.compile(r"flags: (0x[0-9a-fA-F]+)")
+
 DIAG_COMMANDS = (
     ("compositor", "dumpsys SurfaceFlinger | grep -A22 -- '--------Strata composer--------'"),
     ("resumed", "dumpsys activity activities | grep -E 'topResumedActivity|ResumedActivity' | head -20"),
@@ -111,6 +123,11 @@ def summarize_diagnostics(sections: dict[str, str]) -> dict:
         elif line.startswith("-> S"):
             summary["active_layer"] = line[3:].strip()
             summary["protected"] = "protected" in line
+            m = _FLAGS.search(line)
+            if m:
+                flags = int(m.group(1), 16)
+                summary["layer_flags"] = m.group(1)
+                summary["recording_paused"] = bool(flags & RECORDING_PAUSED_FLAG)
     resumed = [l.split("u0 ", 1)[-1].split(" ")[0] for l in sections.get("resumed", "").splitlines() if "u0 " in l]
     summary["resumed"] = sorted(set(resumed))[:8]
     for line in sections.get("vrpower", "").splitlines():
@@ -123,13 +140,22 @@ def summarize_diagnostics(sections: dict[str, str]) -> dict:
     return summary
 
 
+META_PAUSED_CAUSE = "Meta が一時的に録画を止めている（メニューやアプリの切り替え中。通常は数秒〜20秒で戻ります）"
+
+
+def recording_paused(compositor_dump: str) -> bool:
+    return bool(summarize_diagnostics({"compositor": compositor_dump}).get("recording_paused"))
+
+
 def likely_cause(summary: dict) -> str:
+    # Passthrough is not used as a cause: worn tests showed passthrough: 1 with a
+    # normal picture as well (the camera image itself is just not recorded).
     if summary.get("wakefulness") and summary["wakefulness"] != "Awake":
         return "ヘッドセットがスリープ中（画面オフ）"
     if summary.get("proximity", "").upper() == "OPEN":
         return "ヘッドセットを装着していない（近接センサー）"
-    if summary.get("passthrough"):
-        return "パススルー表示中（Meta はカメラ映像を録画させない）"
+    if summary.get("recording_paused"):
+        return META_PAUSED_CAUSE
     if summary.get("protected"):
         return "保護されたレイヤーを表示中（Meta が録画を禁止）"
     return "コンポジターが録画先に描画していない（未装着・遷移中など）"

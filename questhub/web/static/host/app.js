@@ -69,7 +69,10 @@ function connectEvents() {
     }
     if (ev.type === 'recording_stopped' && ev.data.reason === 'disk_full') toast('ディスク不足のため録画を停止しました', 'bad');
     if (ev.type === 'media_black') {
-      if (ev.data.cause) toast(`${alias}: 映像が黒くなっています — ${ev.data.cause}（自動で復旧を試みます）`, 'warn');
+      if (ev.data.cause && !ev.data.meta_paused) {
+        const paused = ev.data.diagnostics && ev.data.diagnostics.recording_paused;
+        toast(`${alias}: 映像が黒くなっています — ${ev.data.cause}${paused ? '' : '（自動で復旧を試みます）'}`, 'warn');
+      }
       else if (ev.data.black === false) toast(`${alias}: 映像が戻りました${ev.data.recovered_by ? `（${({ reset_video: 'キャプチャ再作成', wake: '画面の再起動', restart: 'サーバー再起動' })[ev.data.recovered_by] || ev.data.recovered_by}）` : ''}`, 'ok');
     }
     if (ev.type !== 'recording_progress' || $('#tab-recording').classList.contains('active')) refreshSoon(300);

@@ -438,7 +438,7 @@ do_install() {
   cat <<DONE
 
 [install] Done.
-  CLI:  ./scripts/quest_multi_scrcpy.sh start --dry-run
+  CLI:  ./legacy/quest_multi_scrcpy.sh start --dry-run
   GUI:  ./questhub.command
 DONE
 }

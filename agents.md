@@ -23,9 +23,9 @@
 ## 1. 前提セットアップ（初回）
 ### 1.1 事前の到達性チェック (任意)
 ### 1.2 端末のスリープ抑止
-授業中に画面が暗転しないよう、`./scripts/keep_awake.sh --enable` で `stay_on_while_plugged_in` を一括設定できます。終了後は `--disable` で元に戻してください。
+授業中に画面が暗転しないよう、`./legacy/keep_awake.sh --enable` で `stay_on_while_plugged_in` を一括設定できます。終了後は `--disable` で元に戻してください。
 
-セッション前に `./scripts/check_reachability.sh --ping --adb` を実行すると、`quest_devices.tsv` に登録された端末のネットワーク疎通 (ICMP) と ADB 応答状態を表で確認できます。
+セッション前に `./legacy/check_reachability.sh --ping --adb` を実行すると、`quest_devices.tsv` に登録された端末のネットワーク疎通 (ICMP) と ADB 応答状態を表で確認できます。
 
 
 1. **Developer Mode ON**  
@@ -42,18 +42,18 @@
    adb tcpip 5555                  # Wi-Fiモードへ切替
    adb connect 192.168.10.21:5555  # 以後は Wi-Fi で利用
    ```
-   複数台をまとめて Wi-Fi モードに切り替える場合は `./scripts/usb_to_tcp.sh --port 5555` を使用すると `adb tcpip` を一括実行できます。
+   複数台をまとめて Wi-Fi モードに切り替える場合は `./legacy/usb_to_tcp.sh --port 5555` を使用すると `adb tcpip` を一括実行できます。
 4. **IP固定**  
    ルーターの DHCP 予約で「端末名 ↔ IP」を固定（例：Quest-01 → 192.168.10.21）。50台規模では表計算で管理。
 5. **ディレクトリ準備**  
-   本レポジトリ直下に `scripts/` と録画保存用 `recordings/` を作成しておく。
+   旧版 CLI のスクリプトは `legacy/` にあります（GUI は `questhub/`）。録画は既定で `recordings/` に保存されます。
 
 ### 1.3 Quest OS の近接センサー対策
-Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください（現行の Horizon OS は `prox_open` を受け付けないため、`restore` は `automation_disable` も送って近接センサーを実機の判定に戻します。戻っているかは `adb shell dumpsys vrpowermanager | grep 'proximity state'` が `DISABLED` になっていることで確認できます）。
+Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./legacy/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください（現行の Horizon OS は `prox_open` を受け付けないため、`restore` は `automation_disable` も送って近接センサーを実機の判定に戻します。戻っているかは `adb shell dumpsys vrpowermanager | grep 'proximity state'` が `DISABLED` になっていることで確認できます）。
 
 ```bash
-./scripts/quest_os_tweaks.sh engage --capture-width 1920 --capture-height 1920 --capture-full-rate 1 --capture-eye 2
-./scripts/quest_os_tweaks.sh restore
+./legacy/quest_os_tweaks.sh engage --capture-width 1920 --capture-height 1920 --capture-full-rate 1 --capture-eye 2
+./legacy/quest_os_tweaks.sh restore
 ```
 
 `quest_multi_scrcpy.sh start` はKEYCODE_WAKEUPを送信します。setpropとprox_closeの追加対策は `--quest-tweaks` で明示的に有効にします。個別に Guardian を残したい、prox ブロードキャストを抑止したい場合は後述の `--no-quest-tweaks` / `--quest-no-guardian` / `--quest-no-prox` を付けてください。
@@ -62,17 +62,17 @@ Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態
 
 ## 2. 端末リスト（最大50台）の管理方法
 
-`scripts/quest_devices.tsv` に、端末ごとの Alias とエンドポイントをタブ区切りで記述します。3列目以降は任意（後述）。
+`legacy/quest_devices.tsv` に、端末ごとの Alias とエンドポイントをタブ区切りで記述します。3列目以降は任意（後述）。
 
 ### 2.1.1 LAN内の端末自動検出 (任意)
-`./scripts/discover_quest3.py` を使うと、Wi-Fi ADB (既定ポート5555) で待ち受けている Quest をスキャンできます。
+`./legacy/discover_quest3.py` を使うと、Wi-Fi ADB (既定ポート5555) で待ち受けている Quest をスキャンできます。
 
 ```bash
-./.mamba-env/bin/python scripts/discover_quest3.py --connect           # en0等から自動検出
-./.mamba-env/bin/python scripts/discover_quest3.py --cidr 192.168.10.0/24
+./.mamba-env/bin/python legacy/discover_quest3.py --connect           # en0等から自動検出
+./.mamba-env/bin/python legacy/discover_quest3.py --cidr 192.168.10.0/24
 ```
 
-`--connect` を付けると `adb connect` でモデル/シリアルを取得し、`scripts/quest_devices.tsv` に貼り付け可能な行も出力されます。
+`--connect` を付けると `adb connect` でモデル/シリアルを取得し、`legacy/quest_devices.tsv` に貼り付け可能な行も出力されます。
 
 
 ```tsv
@@ -92,7 +92,7 @@ Quest-30	192.168.10.50:5555
 
 ## 3. mac 用エントリースクリプト
 
-実装は `scripts/quest_multi_scrcpy.sh` を正として参照してください。起動設定は `./scripts/quest_multi_scrcpy.sh start --dry-run` と `README.md` で確認できます。
+実装は `legacy/quest_multi_scrcpy.sh` を正として参照してください。起動設定は `./legacy/quest_multi_scrcpy.sh start --dry-run` と `README.md` で確認できます。
 
 - 公式 scrcpy 5.0.1 と同梱サーバーを使用（旧独自サーバーの上書きを廃止）。
 - 品質は `--quality low|standard|high`（または `QUALITY=`）で選択。標準（standard）は長辺1280px・最大30fps・4Mbps。帯域の目安は 1台あたり low 約1.7 / standard 約4.3 / high 約10.4 Mbps（50台で約84 / 213 / 522 Mbps）。詳細は README の「Capture quality presets」。`MAX_SIZE` / `MAX_FPS` / `BIT_RATE` で個別に上書き可能。
@@ -118,29 +118,29 @@ Quest-30	192.168.10.50:5555
 `start` コマンドの実行中はステータスが背景監視され、接続切断でscrcpyが異常終了した端末は、端末ワーカーが `adb connect` と起動をやり直します。専用ウォッチのみ使いたい場合は `status` コマンドを利用すると、端末リストをクリア画面で数十秒ごとに更新します。既に接続済みなら `--skip-connect` を付けて再接続を抑止。ミラー中も毎回接続を確認したい場合は `start` 側で `--status-connect` を指定してください。
 
 ```bash
-./scripts/quest_multi_scrcpy.sh status --interval 15       # 15秒刻みで更新
-./scripts/quest_multi_scrcpy.sh status --skip-connect      # 既に接続済みの場合
+./legacy/quest_multi_scrcpy.sh status --interval 15       # 15秒刻みで更新
+./legacy/quest_multi_scrcpy.sh status --skip-connect      # 既に接続済みの場合
 ```
 
 ## 4. スクリプトの使い方
 
 ```bash
 # 標準モード（ミラーのみ）
-./scripts/quest_multi_scrcpy.sh start
+./legacy/quest_multi_scrcpy.sh start
 
 # 録画モード（recordings/ 以下に全端末分を保存）
-./scripts/quest_multi_scrcpy.sh start --record
+./legacy/quest_multi_scrcpy.sh start --record
 
 # レイアウト検証のみ
-GRID_COLUMNS=6 GRID_ROWS=5 ./scripts/quest_multi_scrcpy.sh start --dry-run
+GRID_COLUMNS=6 GRID_ROWS=5 ./legacy/quest_multi_scrcpy.sh start --dry-run
 
 # 録画モード + カスタム保存先
-RECORD_DIR="$PWD/recordings/2024-lesson01" ./scripts/quest_multi_scrcpy.sh start --record
+RECORD_DIR="$PWD/recordings/2024-lesson01" ./legacy/quest_multi_scrcpy.sh start --record
 
 # Quest OS ワークアラウンドのカスタマイズ
-./scripts/quest_multi_scrcpy.sh start --quest-tweaks --quest-no-guardian
-QUEST_CAPTURE_FULL_RATE=1 QUEST_CAPTURE_EYE=2 ./scripts/quest_multi_scrcpy.sh start --quest-tweaks --quest-capture-width 1920 --quest-capture-height 1920
-./scripts/quest_multi_scrcpy.sh start --quest-skip-awake-check   # 旧挙動に合わせる
+./legacy/quest_multi_scrcpy.sh start --quest-tweaks --quest-no-guardian
+QUEST_CAPTURE_FULL_RATE=1 QUEST_CAPTURE_EYE=2 ./legacy/quest_multi_scrcpy.sh start --quest-tweaks --quest-capture-width 1920 --quest-capture-height 1920
+./legacy/quest_multi_scrcpy.sh start --quest-skip-awake-check   # 旧挙動に合わせる
 ```
 
 - 録画モード時は **50台 × 高ビットレート** となるため、Mac のストレージ帯域と余裕を事前に確認してください。
@@ -165,7 +165,7 @@ QUEST_CAPTURE_FULL_RATE=1 QUEST_CAPTURE_EYE=2 ./scripts/quest_multi_scrcpy.sh st
 
 ### 6.1 入力対象の共有
 
-`scripts/devices.env` に端末エンドポイントを配列で記述。
+`legacy/devices.env` に端末エンドポイントを配列で記述。
 
 ```bash
 DEVICES=(
@@ -225,7 +225,7 @@ DEVICES=(
 ## 7. 録画・スクリーンショット運用
 
 - **フル録画**：`--record` モードを使うと、端末ごとにマルチトラック MP4 が生成され、後追い分析が容易。
-- **代表録画のみ**：台数が多い場合は `scripts/quest_multi_scrcpy.sh` を二度起動し、①代表端末だけ録画ビットレート高め、②その他はミラーのみ、など役割分担も可能。
+- **代表録画のみ**：台数が多い場合は `legacy/quest_multi_scrcpy.sh` を二度起動し、①代表端末だけ録画ビットレート高め、②その他はミラーのみ、など役割分担も可能。
 - **スクリーンショット**：
   ```bash
   adb -s 192.168.10.21:5555 shell screencap -p /sdcard/quest01.png
@@ -260,7 +260,7 @@ DEVICES=(
 - **録画ファイルが欠損**：ストレージ空き容量と書き込み速度を確認。`--record` は高負荷のため、必要端末のみに限定するか、USB-C 外付けSSDを活用。
 - **入力が効かない UI**：VR 特有のジェスチャーは `adb shell input` で完全再現できない場合あり。Quest 側ガーディアン設定などは手動で対応。
 - **システム UI やブラウザの表示中に真っ黒になる（GUI 版）**：Quest のキャプチャは Meta の Strata コンポジターの録画を経由しているため、コンポジターが録画先に描画しない状態では黒になる。装着中は、Meta ボタンのメニューを開いたときやアプリの起動直後に、Meta が録画を 10〜20 秒止める（自然に戻る）。ほかに、未装着や保護レイヤーでも黒になる。GUI 版は黒画面を自動で検出し、キャプチャ再作成 → 画面起動・装着扱い → サーバー再起動の順に復旧を試み、原因の推定を `~/.questhub/diagnostics/` に記録する（`docs/GUI_DESIGN.md` §4.10）。
-- **scrcpy が黒画面で中央にポインタだけ表示される**：近接センサーが開いたままの可能性大。`./scripts/quest_os_tweaks.sh engage` もしくは `quest_multi_scrcpy.sh start --quest-tweaks` の Quest ワークアラウンドで `prox_close` を送ってから再起動。`--quest-awake-timeout` を延ばすと装着してからの起動待ちに余裕を持たせられます。
+- **scrcpy が黒画面で中央にポインタだけ表示される**：近接センサーが開いたままの可能性大。`./legacy/quest_os_tweaks.sh engage` もしくは `quest_multi_scrcpy.sh start --quest-tweaks` の Quest ワークアラウンドで `prox_close` を送ってから再起動。`--quest-awake-timeout` を延ばすと装着してからの起動待ちに余裕を持たせられます。
 - **Meta メニューをレーザーポインタでなぞると映像が激しく点滅**：Horizon OS v76+ の既知問題。`--crop`/`--client-crop`/`--angle` などの描画フィルターは外し、メニュー操作後に flicker が始まったら該当ウィンドウのみ停止→再実行でリフレッシュ。録画継続が必要な場合は OBS 側でトリミングするなど後段で処理してください。
 
 ---

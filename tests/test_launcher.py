@@ -10,7 +10,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / 'scripts/quest_multi_scrcpy.sh'
+LAUNCHER = ROOT / 'legacy/quest_multi_scrcpy.sh'
 
 
 class LauncherTests(unittest.TestCase):

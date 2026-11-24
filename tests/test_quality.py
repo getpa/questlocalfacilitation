@@ -32,7 +32,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(StreamOptions.from_preset("standard", max_fps=30, audio=False).quality, "standard")
 
     def test_cli_uses_the_same_values(self):
-        script = (ROOT / "scripts/quest_multi_scrcpy.sh").read_text()
+        script = (ROOT / "legacy/quest_multi_scrcpy.sh").read_text()
         units = {"K": 1_000, "M": 1_000_000}
         for name, size, fps, rate in re.findall(r"(\w+)\) size=(\d+); fps=(\d+); rate=(\d+[KM]) ;;", script):
             preset = get_preset(name)

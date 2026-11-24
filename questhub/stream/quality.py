@@ -4,7 +4,7 @@ The bit rate is the encoder's target ceiling: busy scenes approach it, while
 near-static VR menus use much less (a real Quest 3 at "standard" measured
 ~0.5-0.7 Mbps on a quiet screen). Plan networks with the ceiling.
 
-The CLI (scripts/quest_multi_scrcpy.sh --quality) uses the same values.
+The CLI (legacy/quest_multi_scrcpy.sh --quality) uses the same values.
 """
 from __future__ import annotations
 

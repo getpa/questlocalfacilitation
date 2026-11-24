@@ -15,7 +15,7 @@ jobs:
           python-version: '3.11'
       - name: Check shell syntax
         run: |
-          for script in scripts/*.sh runner.sh install.sh questhub.command; do
+          for script in scripts/*.sh legacy/*.sh install.sh questhub.command; do
             bash -n "$script"
           done
       - name: Check syntax with macOS bash 3.2

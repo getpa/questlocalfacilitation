@@ -286,7 +286,7 @@ svg .sub { fill: var(--muted); font-size: 12px; }
 </table></div>
 
 <h3>5.5 TSV の読み込み・書き出し</h3>
-<p>「端末リスト（TSV）」の <span class="ui">書き出し</span> と <span class="ui">読み込み</span> で、CLI と同じ <code>scripts/quest_devices.tsv</code> 形式の台帳をやり取りできます。形式はタブ区切りで、<code>名前　IP:ポート　[列]　[行]</code> です。</p>
+<p>「端末リスト（TSV）」の <span class="ui">書き出し</span> と <span class="ui">読み込み</span> で、CLI と同じ <code>legacy/quest_devices.tsv</code> 形式の台帳をやり取りできます。形式はタブ区切りで、<code>名前　IP:ポート　[列]　[行]</code> です。</p>
 <pre><code># alias	endpoint	[col]	[row]
 Quest-01	192.168.10.21:5555
 Quest-02	192.168.10.22:5555	1	0</code></pre>
@@ -530,7 +530,7 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
 <p><strong>近接センサーの戻し忘れに注意</strong></p>
 <p>「装着中」扱い（<code>prox_close</code>）にしたヘッドセットは、元に戻すまで画面が消えず、自動スリープもしません。Quest Hub は、復旧でこれを使った端末を、表示停止・<span class="ui">授業を終了</span>・Quest Hub の終了時に自動で元に戻します。</p>
 <p>Quest Hub が異常終了した場合や、CLI を使った場合は、次のコマンドで戻してください。</p>
-<pre><code>./scripts/quest_os_tweaks.sh restore</code></pre>
+<pre><code>./legacy/quest_os_tweaks.sh restore</code></pre>
 <p>戻ったかどうかは、<code>adb shell dumpsys vrpowermanager | grep 'proximity state'</code> が <code>DISABLED</code> になっていることで確認できます。</p>
 </div>
 
@@ -601,18 +601,18 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
   <tr><td>ビューワーが開けない・証明書の警告が出る</td><td>証明書を導入し、「信頼」をオンにしたか確認します（iPad は「証明書信頼設定」が必要です）。管理画面のビューワーの状態に「起動できません」と出ていないかも確認します。</td></tr>
   <tr><td>ビューワーでログインできない</td><td>アクセスコードを確認します。コードを変更すると、全員が再ログインになります。</td></tr>
   <tr><td>Meta のメニューを操作すると映像が点滅する</td><td>Horizon OS の既知の問題です。操作後も続く場合は、その端末の表示を停止して再開します。</td></tr>
-  <tr><td>ヘッドセットの画面が消えない・スリープしない</td><td>近接センサーが「装着中」のままです。<code>./scripts/quest_os_tweaks.sh restore</code> で戻します（<a href="#black">13章</a>）。</td></tr>
+  <tr><td>ヘッドセットの画面が消えない・スリープしない</td><td>近接センサーが「装着中」のままです。<code>./legacy/quest_os_tweaks.sh restore</code> で戻します（<a href="#black">13章</a>）。</td></tr>
   <tr><td>「すでに起動しています」と出る</td><td>Quest Hub が起動中です。表示された URL を開きます。</td></tr>
 </table></div>
 
 <!-- 16 -->
 <h2 id="cli">16. CLI との関係</h2>
-<p>リポジトリには、scrcpy のウィンドウを1台ずつ並べる従来の CLI（<code>scripts/quest_multi_scrcpy.sh</code> など）も含まれています。使い方は <code>agents.md</code> と <code>README.md</code> にあります。</p>
+<p>リポジトリには、scrcpy のウィンドウを1台ずつ並べる従来の CLI（<code>legacy/quest_multi_scrcpy.sh</code> など）も含まれています。使い方は <code>agents.md</code> と <code>README.md</code> にあります。</p>
 <div class="danger"><p><strong>同じ端末に GUI と CLI を同時に使わないでください。</strong>1台のヘッドセットを2重にキャプチャすると、Quest の負荷が2倍になります。CLI は、Quest Hub の起動中に実行すると警告を出します。</p></div>
 <ul>
-  <li>端末台帳は TSV（<code>scripts/quest_devices.tsv</code>）で共用できます（<a href="#setup">5.5</a>）。</li>
+  <li>端末台帳は TSV（<code>legacy/quest_devices.tsv</code>）で共用できます（<a href="#setup">5.5</a>）。</li>
   <li>CLI の品質プリセット（<code>--quality low|standard|high</code>）は GUI と同じ値です。</li>
-  <li>CLI の <code>--quest-tweaks</code> で近接センサーを「装着中」にした場合は、終了後に <code>./scripts/quest_os_tweaks.sh restore</code> で戻してください。</li>
+  <li>CLI の <code>--quest-tweaks</code> で近接センサーを「装着中」にした場合は、終了後に <code>./legacy/quest_os_tweaks.sh restore</code> で戻してください。</li>
 </ul>
 
 <!-- Appendix -->

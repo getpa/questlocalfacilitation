@@ -11,7 +11,7 @@
   - v0.9: **M2〜M6 実装完了**（§11 実装状況と設計からの差分）
   - v0.10: Quest の黒画面の原因調査と対策（§4.10）
   - v0.11: 装着中の再現で原因を特定（Strata レイヤーの flags 0x80）。パススルーを原因から外し、Meta の録画停止中は復旧を待機（§4.10）
-  - v0.12: USB 接続中の端末の Wi-Fi 接続先を SSID とパスワードで設定（§4.9.1）
+  - v0.12: Wi-Fi の接続先を adb で一括設定する機能を調査・試作。運用に耐えないため削除し、調査結果だけを残す（§4.9.1）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -415,22 +415,32 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 - 最新値は台帳（`ssid`, `bssid`, `band`, `rssi`, `wifi_seen_at`）、変更は観測履歴に残す（`registry.observe(..., wifi=...)` 経由。SSID が変わったら `SsidChanged` を発行）。
 - TSV エクスポートには含めない（既存CLIの形式を変えないため）。別途 CSV で一覧を書き出せる。
 
-#### 4.9.1 Wi-Fi の接続先の設定（USB 接続中の端末）
+#### 4.9.1 Wi-Fi の接続先の一括設定（調査のみ・不採用）
 
-**調査（Quest 3 / Android 14、adb shell = uid 2000）**
-- `cmd wifi connect-network <ssid> open|wpa2|wpa3 [<passphrase>]` は shell で実行できる（権限エラーにならない）。ネットワークを保存して接続する。
-- `cmd wifi add-network` は `SecurityException`（保存だけはできない）。`add-suggestion` は承認に root が必要で、使えない。
-- `list-networks`・`status` は読める。`forget-network` もヘルプ上は shell で使える（未使用）。
+**結論**: USB 接続中の端末に SSID とパスワードを送って Wi-Fi の接続先を一括設定する機能を試作したが、**機能として運用に耐えないため削除した**（2026-11-24）。接続先は、ヘッドセットの設定で選ぶか、MDM（Meta Horizon managed services）で配布する。
 
-**実装（`devices/wifi_config.py`、`ProvisioningService.configure_wifi`、`POST /api/usb/wifi-network`）**
-- 「端末」タブの「Wi-Fi の接続先を設定」で SSID・セキュリティ・パスワードを入力し、選んだ USB 端末（またはすべて）に送る。必要なら続けて Wi-Fi 化（`adb tcpip`）する。
-- **USB 接続中の端末だけが対象。** Wi-Fi ADB 経由で接続先を変えると、その接続が切れるため。
-- **パスワードの扱い**: `adb shell sh` の標準入力でヘッドセットに送るので、adb の引数（`ps` で見える）、エラーメッセージ、ログ、イベント、API の応答に出ない。Quest Hub のサーバーには保存しない（画面の入力欄には、ページを開いている間だけ残る）。SSID とパスワードはヘッドセットの `sh` 用にシングルクォートで囲む。
-- 送信後、`cmd wifi status` が指定の SSID を報告するまで最大 30 秒待つ。報告されなければ「接続できませんでした（現在: ○○）」とする。
-- **SSID の警告との関係**: 送る前に、その端末の SSID の基準を新しい SSID にする（意図した変更なので警告しない）。接続に失敗したら基準を元に戻す。
-- 制限: 隠し SSID、WPA2 Enterprise（802.1X）、WEP には対応しない。
-- **保存済みネットワーク（実機で確認、2026-11-24）**: 設定アプリや MDM（`com.oculus.q4b.mdm`）が保存したネットワークには、adb から接続できない。WifiConfigManager が uid 2000 からの更新を拒否するため（`does not have permission to update configuration`）で、Quest Hub は送信前に保存元を `dumpsys wifi` で確認してエラーにする。保存済みネットワークを ID で選んで接続するシェルコマンドもない。Wi-Fi をオフ→オン（`cmd wifi set-wifi-enabled`）すると自動接続が保存済みネットワークから選ぶが、どれを選ぶかは指定できない（実機では `mlab601-IoT` が選ばれた。`mlab601` は認証失敗の一時ブロック中だった）。adb で追加したネットワークは `cmd wifi forget-network` で削除できる。
-- 運用: 授業用ネットワークは、ヘッドセットに保存されていない SSID を adb で追加するか、MDM で配布する。設定アプリで保存済みの SSID に切り替えたい場合は、ヘッドセットの設定で選ぶ。
+**削除の理由**
+- 授業で使う SSID は、たいていヘッドセットにすでに保存されている（設定アプリや MDM が保存）。**ほかのアプリが保存したネットワークには、adb から接続できない。**
+- 保存済みのネットワークを選んで接続する手段が adb にない。Wi-Fi のオフ→オンでは、どれにつながるかを指定できない。
+- adb から接続できるのは「まだ保存されていない SSID」だけで、使える場面が限られる。
+- 試験中に、接続先を戻せなくなる状態になった（下記）。50 台で同じことが起きると、授業前の復旧に時間がかかる。
+
+**調査（Quest 3 / Horizon OS、Android 14、adb shell = uid 2000、実機で確認）**
+
+| コマンド | 結果 |
+|---------|------|
+| `cmd wifi status` / `list-networks` / `list-scan-results` | 読める |
+| `cmd wifi connect-network <ssid> open\|wpa2\|wpa3 [<pass>]` | 未保存の SSID なら、保存して接続できる（`mlab601-6g`・WPA3 で成功。台帳の IP も更新された） |
+| 同上（設定アプリ・MDM が保存した SSID） | **失敗**。`Connection failed`。logcat に `WifiConfigManager: UID 2000 does not have permission to update configuration` |
+| `cmd wifi add-network` | `SecurityException`（保存だけはできない） |
+| `cmd wifi add-suggestion` | 承認に root が必要（`network-suggestions-set-user-approved`）で使えない |
+| `cmd wifi forget-network <id>` | adb が追加したネットワークは削除できる（`Forget successful`） |
+| `cmd wifi start-scan` | 接続先は変わらない |
+| `cmd wifi set-wifi-enabled disabled/enabled` | 保存済みの中から自動接続が選ぶ。選ぶ先は指定できない |
+
+- 保存したアプリ（creator）は `dumpsys wifi` の「Configured networks」の `cuid=… cname=…` で分かる。試験した端末では、`mlab601` などは `com.oculus.panelapp.settings`（設定アプリ）、`mlab601-HMD` などは `com.oculus.q4b.mdm`（MDM）が保存していた。
+- 試験の経過: `mlab601-6g`（adb で追加）に切り替え → `forget-network` で削除 → 自動接続は元の `mlab601` ではなく `mlab601-IoT` を選んだ。`mlab601` は認証失敗が続いたことによる一時ブロック（`NETWORK_SELECTION_TEMPORARY_DISABLED`）になっていて、Wi-Fi をオフ→オンするたびに失敗が増えてブロックが延びた。認証失敗の原因は分かっていない。
+- 試作時の設計メモ（再検討する場合）: 対象は USB 接続中の端末だけにする（Wi-Fi ADB 経由で接続先を変えると、その接続が切れる）。パスワードは `adb shell sh` の標準入力で渡し、adb の引数・ログ・イベントに出さない。意図した変更なので、送る前に SSID 警告の基準を新しい SSID にし、失敗したら戻す。
 
 ---
 

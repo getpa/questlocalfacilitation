@@ -203,14 +203,6 @@ class Registry:
             # Back on the baseline network: the earlier warning no longer applies.
             self._ack_kind(serial, "ssid_changed")
 
-    def expect_ssid(self, serial: str, ssid: str) -> None:
-        """The operator moves this headset to `ssid` on purpose: make it the baseline, no warning."""
-        self._set(serial, ssid_baseline=ssid)
-        self._ack_kind(serial, "ssid_changed")
-
-    def restore_ssid_baseline(self, serial: str, ssid: str | None) -> None:
-        self._set(serial, ssid_baseline=ssid)
-
     def _warn(self, serial: str, kind: str, message: str, **data) -> None:
         now = time.time()
         with self._lock:

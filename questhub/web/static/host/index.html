@@ -50,26 +50,6 @@
           <button id="enable-wifi-selected" class="primary">選択した端末を Wi-Fi 化</button>
           <button id="enable-wifi-all">USB 端末をすべて Wi-Fi 化</button>
         </div>
-        <details id="wifi-net" class="wifi-net">
-          <summary>Wi-Fi の接続先を設定（USB 接続中の端末）</summary>
-          <form id="wifi-net-form" class="stack" autocomplete="off">
-            <label>SSID <input id="wifi-ssid" maxlength="32" required autocomplete="off" spellcheck="false"></label>
-            <label>セキュリティ
-              <select id="wifi-security">
-                <option value="wpa2">WPA2（WPA2/WPA3 混在も含む）</option>
-                <option value="wpa3">WPA3</option>
-                <option value="open">なし（オープン）</option>
-              </select>
-            </label>
-            <label>パスワード <input id="wifi-pass" type="password" minlength="8" maxlength="63" autocomplete="new-password"></label>
-            <label class="row"><input type="checkbox" id="wifi-then-adb" checked> 接続後に Wi-Fi 化する（adb tcpip）</label>
-            <div class="row">
-              <button type="submit" id="wifi-net-selected" class="primary">選択した端末に設定</button>
-              <button type="button" id="wifi-net-all">USB 端末すべてに設定</button>
-            </div>
-            <p class="hint muted">ヘッドセットにこのネットワークを保存して接続します。パスワードはヘッドセットへ送るだけで、Quest Hub には保存しません。この操作による SSID の変更は警告しません。</p>
-          </form>
-        </details>
         <p class="hint muted">Wi-Fi 化のあとは USB ケーブルを抜いて構いません。「許可待ち」はヘッドセット内の「USB デバッグを許可」で「常に許可」を選んでください。</p>
       </div>
       <div class="card">

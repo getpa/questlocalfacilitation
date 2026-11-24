@@ -216,7 +216,7 @@ It opens `http://127.0.0.1:8765/` in a Chrome app window (or your default browse
 | Tab | What you can do |
 |-----|-----------------|
 | モニター | Grid of every streaming headset. Click a tile for the focus view (audio, quality, key frame, native scrcpy window, touch/key/text input). Drag tiles to swap seats. Tiles that cannot keep up drop to key-frame-only automatically. Broadcast HOME/BACK/WAKE. |
-| 端末 | USB headsets → “Wi-Fi 化” (`adb tcpip` + connect + register IP/SSID). “Wi-Fi の接続先を設定” joins USB headsets to an SSID with a passphrase (`cmd wifi connect-network`; the passphrase goes over stdin and is never stored). LAN scan. Import or export `legacy/quest_devices.tsv`. Edit names, IPs, seats and quality per headset. Connection states include “USB で再有効化が必要” (Wi-Fi ADB was reset). |
+| 端末 | USB headsets → “Wi-Fi 化” (`adb tcpip` + connect + register IP/SSID). LAN scan. Import or export `legacy/quest_devices.tsv`. Edit names, IPs, seats and quality per headset. Connection states include “USB で再有効化が必要” (Wi-Fi ADB was reset). |
 | 録画 | Record all or selected headsets into `recordings/<session>/` (MKV, H.264 + Opus, no re-encoding) with `session.json`. Quality is locked while recording. Recording stops automatically when free disk space drops below the limit. |
 | ネットワーク | Headset counts per SSID, access point (BSSID) and band. Any SSID is accepted; an SSID change while running raises a warning until acknowledged. CSV export. |
 | 設定・ビューワー | Publish the HTTPS viewer (access code, QR codes, local CA page on port 8766). Set defaults. “授業を終了” stops everything and can disable Wi-Fi ADB on all headsets (`adb usb`). |

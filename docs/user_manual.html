@@ -267,16 +267,7 @@ svg .sub { fill: var(--muted); font-size: 12px; }
 </ul>
 <div class="note"><p>Wi-Fi ADB は、Quest を再起動すると無効になることがあります。その場合、接続状態が <span class="chip bad">USB で再有効化が必要</span> になります。もう一度 USB でつないで Wi-Fi 化してください。IP の変化を防ぐため、ルーターの DHCP 予約で端末ごとに IP を固定しておくと運用が楽になります。</p></div>
 
-<h3>5.2.1 Wi-Fi の接続先を設定する</h3>
-<p>授業用のネットワークへの接続を、ヘッドセットを被らずに USB 経由で設定できます。</p>
-<ol>
-  <li>Quest を USB でつなぎ、<span class="ui">端末</span> タブの「USB 接続の端末」に表示されることを確認します。</li>
-  <li><span class="ui">Wi-Fi の接続先を設定（USB 接続中の端末）</span> を開き、SSID、セキュリティ（通常は WPA2）、パスワードを入力します。</li>
-  <li>続けて Wi-Fi 化する場合は <span class="ui">接続後に Wi-Fi 化する（adb tcpip）</span> にチェックを入れたままにします。</li>
-  <li>対象にチェックを入れて <span class="ui">選択した端末に設定</span>、または <span class="ui">USB 端末すべてに設定</span> を押します。</li>
-  <li>「○○ に接続しました」と通知されたら完了です。30 秒以内に接続できない場合は、SSID・パスワード・電波を確認してください。</li>
-</ol>
-<div class="note"><p>パスワードはヘッドセットに送るだけで、Quest Hub には保存しません。この操作で SSID が変わっても、SSID の変更警告（12章）は出ません。隠し SSID、WPA2 Enterprise、WEP には対応していません。Wi-Fi 化済みの端末も、USB でつないでいれば設定できます。</p></div>
+<div class="note"><p>ヘッドセットの Wi-Fi の接続先は、ヘッドセットの設定（または MDM）で選んでください。Quest Hub からは変更できません。adb から接続先を変える方法は調べましたが、保存済みのネットワークを選べないなど運用に耐えないため、機能にはしていません（設計書 §4.9.1）。</p></div>
 
 <h3>5.3 LAN のスキャン</h3>
 <p>すでに Wi-Fi 化した端末は、「LAN をスキャン」の <span class="ui">スキャン</span> で探して台帳に登録できます。範囲を空欄にすると、この Mac のサブネットを調べます。<code>192.168.10.0/24</code> のように指定することもできます。</p>

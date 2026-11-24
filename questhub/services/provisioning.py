@@ -7,7 +7,7 @@ import logging
 
 from questhub.adb.client import AdbError
 from questhub.core import events as ev
-from questhub.devices import discovery, provisioning, wifi_config
+from questhub.devices import discovery, provisioning
 from questhub.devices.manager import DeviceManager
 from questhub.devices.registry import Registry
 from questhub.devices.telemetry import read_battery, read_wifi
@@ -58,48 +58,6 @@ class ProvisioningService:
             result.update(ok=True, ip=ip, endpoint=endpoint, ssid=wifi.ssid if wifi else None)
             self._progress(usb_id, "done", serial=serial, ip=ip, ssid=result["ssid"])
         except (AdbError, RuntimeError, OSError) as exc:
-            result["error"] = str(exc)
-            self._progress(usb_id, "error", serial=result.get("serial"), error=str(exc))
-        return result
-
-    async def configure_wifi(self, usb_ids: list[str], target: wifi_config.WifiTarget,
-                             enable_adb: bool = False, port: int = 5555) -> list[dict]:
-        """Join USB headsets to `target` (then optionally switch them to Wi-Fi ADB).
-
-        The passphrase lives only in `target` for this call: it is not stored,
-        logged or published in events.
-        """
-        target.validate()
-        return list(await asyncio.gather(*(self._configure_one(u, target, enable_adb, port) for u in usb_ids)))
-
-    async def _configure_one(self, usb_id: str, target: wifi_config.WifiTarget, enable_adb: bool,
-                             port: int) -> dict:
-        adb = self.manager.adb.for_serial(usb_id)
-        result = {"usb_id": usb_id, "ok": False, "ssid": target.ssid}
-        try:
-            identity = await provisioning.read_identity(adb)
-            serial = result["serial"] = identity.serial
-            self._progress(usb_id, "wifi_connect", serial=serial, ssid=target.ssid)
-            row = self.registry.get(serial)
-            previous = row["ssid_baseline"] if row else None
-            self.registry.expect_ssid(serial, target.ssid)
-            try:
-                info = await wifi_config.connect_network(adb, target)
-            except BaseException:
-                self.registry.restore_ssid_baseline(serial, previous)   # it did not move after all
-                raise
-            ip = await provisioning.detect_ip(adb, attempts=20)
-            self.registry.observe(serial, "usb", ip=ip, port=port, wifi=info, model=identity.model)
-            self.registry.expect_ssid(serial, target.ssid)
-            result.update(ok=True, ip=ip)
-            self._progress(usb_id, "wifi_done", serial=serial, ssid=target.ssid, ip=ip)
-            if enable_adb:
-                enabled = await self._enable_one(usb_id, port)
-                result.update(adb=enabled)
-                result["ok"] = enabled.get("ok", False)
-                if not result["ok"]:
-                    result["error"] = enabled.get("error")
-        except (AdbError, RuntimeError, OSError, TimeoutError, wifi_config.WifiConfigError) as exc:
             result["error"] = str(exc)
             self._progress(usb_id, "error", serial=result.get("serial"), error=str(exc))
         return result

@@ -126,21 +126,6 @@ def create_admin_app(app: Application) -> FastAPI:
             _err(RuntimeError("USB 接続の端末がありません"), 400)
         return await app.provisioning.enable_wifi(usb_ids, int(body.get("port") or 5555))
 
-    @api.post("/api/usb/wifi-network")
-    async def wifi_network(body: dict = Body(...)):
-        """Join USB headsets to a Wi-Fi network. The passphrase is used once and never stored."""
-        from questhub.devices.wifi_config import WifiConfigError, WifiTarget
-        usb_ids = body.get("usb_ids") or [d["usb_id"] for d in app.manager.usb_devices() if d["state"] == "device"]
-        if not usb_ids:
-            _err(RuntimeError("USB 接続の端末がありません"), 400)
-        try:
-            target = WifiTarget(ssid=str(body.get("ssid") or ""), security=str(body.get("security") or "wpa2"),
-                                passphrase=str(body.get("passphrase") or "")).validate()
-        except WifiConfigError as exc:
-            _err(exc, 400)
-        return await app.provisioning.configure_wifi(usb_ids, target, enable_adb=bool(body.get("enable_adb")),
-                                                     port=int(body.get("port") or 5555))
-
     @api.post("/api/scan")
     async def scan(body: dict = Body(default={})):
         try:

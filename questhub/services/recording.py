@@ -29,7 +29,7 @@ PROGRESS_INTERVAL = 5.0
 
 
 def safe_name(text: str) -> str:
-    return re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE).strip("_") or "session"
+    return re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE).strip("_.") or "session"
 
 
 class RecordingService:

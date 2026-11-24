@@ -1,4 +1,4 @@
-"""Quest Hub GUI: `./questhub.command` or `./.mamba-env/bin/python -m questhub`."""
+"""Quest Hub GUI: `./questhub.command` (macOS), `questhub.cmd` (Windows) or `python -m questhub`."""
 from __future__ import annotations
 
 import argparse
@@ -12,16 +12,47 @@ import sys
 from questhub import __version__, paths
 
 
+def _windows_chromium() -> str | None:
+    """Chrome, else Edge (Chromium, preinstalled on Windows 10/11)."""
+    import os
+    roots = [os.environ.get(k) for k in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")]
+    for rel in ("Google/Chrome/Application/chrome.exe", "Microsoft/Edge/Application/msedge.exe"):
+        for root in roots:
+            if root and (Path(root) / rel).exists():
+                return str(Path(root) / rel)
+    return None
+
+
 def open_browser(url: str) -> None:
-    chrome = [p for p in ("/Applications/Google Chrome.app", str(Path.home() / "Applications/Google Chrome.app"))
-              if Path(p).exists()]
+    """Open the admin UI as an app window without an address bar (docs §3.1) when possible."""
     try:
-        if chrome:  # app window without address bar (docs §3.1)
+        if sys.platform == "win32":
+            browser = _windows_chromium()
+            if browser:
+                subprocess.Popen([browser, f"--app={url}"])
+            else:
+                import webbrowser
+                webbrowser.open(url)
+            return
+        chrome = [p for p in ("/Applications/Google Chrome.app", str(Path.home() / "Applications/Google Chrome.app"))
+                  if Path(p).exists()]
+        if chrome:
             subprocess.Popen(["open", "-na", chrome[0], "--args", f"--app={url}"])
         else:
             subprocess.Popen(["open", url])
     except OSError as exc:
         print(f"[questhub] open {url} manually ({exc})", file=sys.stderr)
+
+
+def install_stop_handlers(loop: asyncio.AbstractEventLoop, stop: asyncio.Event) -> None:
+    """Ctrl+C / termination ends the run cleanly (Windows has no loop signal handlers)."""
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except (NotImplementedError, RuntimeError):
+            signal.signal(sig, lambda *_: loop.call_soon_threadsafe(stop.set))
+    if sys.platform == "win32" and hasattr(signal, "SIGBREAK"):
+        signal.signal(signal.SIGBREAK, lambda *_: loop.call_soon_threadsafe(stop.set))  # console window closed
 
 
 async def main_async(args) -> int:
@@ -41,8 +72,7 @@ async def main_async(args) -> int:
     servers = Servers(app)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+    install_stop_handlers(loop, stop)
     try:
         await app.start()
         await servers.start()

@@ -8,6 +8,9 @@ import tarfile
 import tempfile
 import unittest
 
+if sys.platform == "win32":
+    raise unittest.SkipTest("bash scripts (macOS installer / legacy CLI) are not used on Windows")
+
 ROOT = Path(__file__).resolve().parents[1]
 
 

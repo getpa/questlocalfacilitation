@@ -1,0 +1,16 @@
+# Runtime environment for Windows (installed by install.ps1).
+# Same Python packages as environment.yml; the Unix helper tools (jq, sed,
+# coreutils, curl, unzip) are not needed because PowerShell does that work.
+name: quest-mirror
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - requests
+  # Quest Hub GUI (docs/GUI_DESIGN.md §9.7)
+  - av
+  - numpy
+  - fastapi
+  - uvicorn
+  - cryptography
+  - qrcode

@@ -4,7 +4,7 @@ Toolkit for mirroring up to 50 Meta Quest 3 headsets over local Wi-Fi using scrc
 
 ## Prerequisites
 - macOS 13 (Ventura) or later, Apple Silicon or Intel
-- Google Chrome (for the upcoming Quest Hub GUI)
+- Google Chrome recommended for the Quest Hub GUI (any Chromium or WebKit browser with WebCodecs works)
 - USB access to each Quest for the initial developer-mode pairing
 
 Nothing else is required: no Mambaforge/conda, Homebrew, or Xcode Command Line Tools. The installer downloads a pinned, checksum-verified [micromamba](https://github.com/mamba-org/micromamba-releases) into `.tools/` and builds the environment in `.mamba-env/`, entirely inside this repository (no sudo, no changes to your shell profile).
@@ -192,12 +192,36 @@ Use `scripts/quest_os_tweaks.sh engage` / `restore` outside the launcher when yo
 
 If flicker appears when the controller laser hovers Meta UI elements, keep cropping/angle flags disabled and restart the affected session. Automatic recovery handles process/connection failures; it cannot detect flicker or a frozen image while scrcpy is still running.
 
-## Quest Hub PoC (GUI preview)
+## Quest Hub GUI
 
-A single-headset proof of concept for the upcoming GUI (`docs/GUI_DESIGN.md` §7.1). It talks to the official scrcpy 5.0.1 server directly, shows the stream in the browser (WebCodecs), plays audio, and records Matroska (H.264 + Opus) without re-encoding.
+A browser-based GUI for the whole workflow: Wi-Fi provisioning, the device registry (IP, SSID, battery), the multi-headset grid with audio and input, recording, and a read-only viewer for other PCs, Android devices and iPads. The design is in `docs/GUI_DESIGN.md`.
 
 ```bash
-./.mamba-env/bin/python -m questhub.poc                                  # first adb device -> http://127.0.0.1:8765
+./questhub.command                       # or: ./.mamba-env/bin/python -m questhub
+```
+
+It opens `http://127.0.0.1:8765/` in a Chrome app window (or your default browser). Data (registry, settings, certificates) lives in `~/.questhub/`.
+
+| Tab | What you can do |
+|-----|-----------------|
+| モニター | Grid of every streaming headset. Click a tile for the focus view (audio, quality, key frame, native scrcpy window, touch/key/text input). Drag tiles to swap seats. Tiles that cannot keep up drop to key-frame-only automatically. Broadcast HOME/BACK/WAKE. |
+| 端末 | USB headsets → “Wi-Fi 化” (`adb tcpip` + connect + register IP/SSID). LAN scan. Import or export `scripts/quest_devices.tsv`. Edit names, IPs, seats and quality per headset. Connection states include “USB で再有効化が必要” (Wi-Fi ADB was reset). |
+| 録画 | Record all or selected headsets into `recordings/<session>/` (MKV, H.264 + Opus, no re-encoding) with `session.json`. Quality is locked while recording. Recording stops automatically when free disk space drops below the limit. |
+| ネットワーク | Headset counts per SSID, access point (BSSID) and band. Any SSID is accepted; an SSID change while running raises a warning until acknowledged. CSV export. |
+| 設定・ビューワー | Publish the HTTPS viewer (access code, QR codes, local CA page on port 8766). Set defaults. “授業を終了” stops everything and can disable Wi-Fi ADB on all headsets (`adb usb`). |
+
+The viewer (`https://<mac-ip>:8443/`) shows a low-fps key-frame grid. Clicking a tile opens one headset at full frame rate with audio. It never exposes IPs or SSIDs. Each viewing device installs the local CA once from `http://<mac-ip>:8766/` (iPad/iPhone profile, Android, Mac and Windows instructions on the page).
+
+The CLI launcher warns when it is started while the GUI is running, because capturing a headset twice doubles its load.
+
+Black capture: on Horizon OS the stream comes from Meta's compositor recording, which can turn completely black. Worn tests showed that Meta pauses the recording for about 8–20 s when the Meta-button menu opens or an app such as the browser starts; the active compositor layer then has flag `0x80`, and the picture always comes back by itself. It can also turn black when the headset is not worn or with protected layers. The GUI detects this from key frames and marks the tile “黒画面”. While Meta pauses the recording it waits; otherwise it tries to recover in steps: it recreates the capture, wakes the headset and marks it as worn (`prox_close`), and finally restarts the server. It also saves a diagnostic snapshot with the likely cause to `~/.questhub/diagnostics/`. See `docs/GUI_DESIGN.md` §4.10.
+
+## Quest Hub PoC (single headset)
+
+The single-headset proof of concept that preceded the GUI (`docs/GUI_DESIGN.md` §7.1). It talks to the official scrcpy 5.0.1 server directly, shows the stream in the browser (WebCodecs), plays audio, and records Matroska (H.264 + Opus) without re-encoding.
+
+```bash
+./.mamba-env/bin/python -m questhub.poc                                  # first adb device -> http://127.0.0.1:8765 (stop the GUI first)
 ./.mamba-env/bin/python -m questhub.poc --serial 192.168.22.201:5555
 ./.mamba-env/bin/python -m questhub.poc --record-seconds 10                # headless recording into recordings/poc/
 ```

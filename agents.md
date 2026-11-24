@@ -8,6 +8,9 @@
 
 ## 0. 構成の全体像
 
+> **GUI 版（Quest Hub）**: `./questhub.command` で、Wi-Fi 化・端末台帳（IP/SSID/電池）・最大50台のグリッド表示（音声・操作）・録画・ブラウザビューワー（PC/Android/iPad）をすべてブラウザから操作できます。使い方は README の「Quest Hub GUI」、設計は `docs/GUI_DESIGN.md`。以下は CLI（scrcpy ウィンドウ方式）の運用ガイドです。GUI と CLI を同時に同じ端末へ使わないでください（CLI は GUI 起動中に警告します）。
+
+
 - **各 Quest 3**：Developer Mode ON → USB デバッグ常時許可 → 同一LAN（推奨：Wi-Fi 6 / 6E、5GHz以上）
 - **Mac**：`./install.sh` で `adb` と `scrcpy` をリポジトリ内に導入（Homebrew / conda 不要）
 - **初回接続**：USB → `adb tcpip 5555` → 端末IP固定 or DHCP予約 → 以後は Wi-Fi (`adb connect <IP>:5555`)
@@ -46,7 +49,7 @@
    本レポジトリ直下に `scripts/` と録画保存用 `recordings/` を作成しておく。
 
 ### 1.3 Quest OS の近接センサー対策
-Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください。
+Meta Horizon OS v76 以降は「ヘッドセットを装着している」状態でないとスクリーンキャストが黒画面（中央にポインタのみ）になる場合があります。`./scripts/quest_os_tweaks.sh engage` を実行すると、Guardian を一時停止し、`prox_close` ブロードキャストで近接センサーを強制的に閉じた状態にし、必要であれば `debug.oculus.capture.*` の setprop も一括投入します。授業後は `restore` サブコマンドで Guardian/近接センサー設定を元に戻してください（現行の Horizon OS は `prox_open` を受け付けないため、`restore` は `automation_disable` も送って近接センサーを実機の判定に戻します。戻っているかは `adb shell dumpsys vrpowermanager | grep 'proximity state'` が `DISABLED` になっていることで確認できます）。
 
 ```bash
 ./scripts/quest_os_tweaks.sh engage --capture-width 1920 --capture-height 1920 --capture-full-rate 1 --capture-eye 2
@@ -256,7 +259,8 @@ DEVICES=(
 - **scrcpy ウィンドウが溢れる**：`GRID_COLUMNS`/`GRID_ROWS` を増やす、または複数モニターに分けて複数回起動。
 - **録画ファイルが欠損**：ストレージ空き容量と書き込み速度を確認。`--record` は高負荷のため、必要端末のみに限定するか、USB-C 外付けSSDを活用。
 - **入力が効かない UI**：VR 特有のジェスチャーは `adb shell input` で完全再現できない場合あり。Quest 側ガーディアン設定などは手動で対応。
-- **scrcpy が黒画面で中央にポインタだけ表示される**：近接センサーが開いたままの可能性大。`./scripts/quest_os_tweaks.sh engage` もしくは `quest_multi_scrcpy.sh start` の Quest ワークアラウンド（デフォルト有効）で `prox_close` を送ってから再起動。`--quest-awake-timeout` を延ばすと装着してからの起動待ちに余裕を持たせられます。
+- **システム UI やブラウザの表示中に真っ黒になる（GUI 版）**：Quest のキャプチャは Meta の Strata コンポジターの録画を経由しているため、コンポジターが録画先に描画しない状態では黒になる。装着中は、Meta ボタンのメニューを開いたときやアプリの起動直後に、Meta が録画を 10〜20 秒止める（自然に戻る）。ほかに、未装着や保護レイヤーでも黒になる。GUI 版は黒画面を自動で検出し、キャプチャ再作成 → 画面起動・装着扱い → サーバー再起動の順に復旧を試み、原因の推定を `~/.questhub/diagnostics/` に記録する（`docs/GUI_DESIGN.md` §4.10）。
+- **scrcpy が黒画面で中央にポインタだけ表示される**：近接センサーが開いたままの可能性大。`./scripts/quest_os_tweaks.sh engage` もしくは `quest_multi_scrcpy.sh start --quest-tweaks` の Quest ワークアラウンドで `prox_close` を送ってから再起動。`--quest-awake-timeout` を延ばすと装着してからの起動待ちに余裕を持たせられます。
 - **Meta メニューをレーザーポインタでなぞると映像が激しく点滅**：Horizon OS v76+ の既知問題。`--crop`/`--client-crop`/`--angle` などの描画フィルターは外し、メニュー操作後に flicker が始まったら該当ウィンドウのみ停止→再実行でリフレッシュ。録画継続が必要な場合は OBS 側でトリミングするなど後段で処理してください。
 
 ---

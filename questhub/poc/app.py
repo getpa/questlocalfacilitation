@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
-import struct
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -21,38 +20,9 @@ from questhub.stream import hub as hubmod
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-KIND_SESSION, KIND_VIDEO_CONFIG, KIND_VIDEO, KIND_AUDIO_CONFIG, KIND_AUDIO = 1, 2, 3, 4, 5
-
-
-def encode_event(event: hubmod.Event) -> bytes:
-    if event.kind == hubmod.SESSION:
-        return struct.pack(">BBQII", KIND_SESSION, 0, 0, event.session.width, event.session.height)
-    kind = {
-        hubmod.VIDEO_CONFIG: KIND_VIDEO_CONFIG,
-        hubmod.VIDEO: KIND_VIDEO,
-        hubmod.AUDIO_CONFIG: KIND_AUDIO_CONFIG,
-        hubmod.AUDIO: KIND_AUDIO,
-    }[event.kind]
-    packet = event.packet
-    flags = 1 if packet.key_frame else 0
-    return struct.pack(">BBQ", kind, flags, packet.pts or 0) + packet.data
-
-
-class ViewerFilter:
-    """Per-viewer policy (docs/GUI_DESIGN.md §4.6): full rate, or every Nth key frame."""
-
-    def __init__(self, keyframes_only: bool, every: int):
-        self.keyframes_only = keyframes_only
-        self.every = max(1, every)
-        self._key_count = 0
-
-    def accept(self, event: hubmod.Event) -> bool:
-        if event.kind != hubmod.VIDEO or not self.keyframes_only:
-            return True
-        if not event.packet.key_frame:
-            return False
-        self._key_count += 1
-        return (self._key_count - 1) % self.every == 0
+from questhub.web.media_ws import (  # noqa: E402,F401  (re-exported for the PoC and load test)
+    KIND_AUDIO, KIND_AUDIO_CONFIG, KIND_SESSION, KIND_VIDEO, KIND_VIDEO_CONFIG, ViewerFilter, encode_event,
+)
 
 
 def create_app(session: DeviceSession, start_session: bool = True) -> FastAPI:

@@ -166,6 +166,8 @@ for entry in "${DEVICES[@]}"; do
     fi
     if [[ ${SKIP_PROX} == false ]]; then
       "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open >/dev/null 2>&1 || true
+      # Newer Horizon OS ignores prox_open; automation_disable hands the sensor back to the hardware.
+      "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.automation_disable >/dev/null 2>&1 || true
     fi
     if [[ -n ${CAP_WIDTH} ]]; then
       "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" >/dev/null 2>&1 || true

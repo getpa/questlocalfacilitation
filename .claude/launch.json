@@ -2,16 +2,27 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "questhub",
+      "runtimeExecutable": "./.mamba-env/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "questhub",
+        "--no-browser",
+        "-v"
+      ],
+      "port": 8765
+    },
+    {
       "name": "questhub-poc",
       "runtimeExecutable": "./.mamba-env/bin/python",
       "runtimeArgs": [
         "-m",
         "questhub.poc",
         "--port",
-        "8765",
+        "8770",
         "-v"
       ],
-      "port": 8765
+      "port": 8770
     },
     {
       "name": "questhub-loadtest",

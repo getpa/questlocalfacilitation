@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 import logging
 from pathlib import Path
@@ -42,6 +42,7 @@ class RecordingStats:
     stopped_at: float | None = None
     duration_us: int = 0
     error: str | None = None
+    parts: list = field(default_factory=list)   # files written (a new part when resolution/SPS changes)
 
 
 class Recorder:
@@ -88,7 +89,14 @@ class Recorder:
 
     # ---------------------------------------------------------------- thread
 
+    def part_path(self, number: int) -> Path:
+        if number <= 1:
+            return self.path
+        return self.path.with_name(f"{self.path.stem}_part{number:02d}{self.path.suffix}")
+
     def _mux_loop(self) -> None:
+        part = 0
+        written_bytes = 0
         container = template = None
         vstream = astream = None
         session = video_config = audio_config = None
@@ -100,8 +108,11 @@ class Recorder:
             log.warning("audio %s not recorded (only Opus is supported)", self.hub.audio_codec)
 
         def open_container():
-            nonlocal container, template, vstream, astream
-            container = av.open(str(self.path), "w", format="matroska")
+            nonlocal container, template, vstream, astream, part
+            part += 1
+            path = self.part_path(part)
+            self.stats.parts.append(str(path))
+            container = av.open(str(path), "w", format="matroska")
             # PyAV cannot set extradata on a codec-less mux stream, but a stream
             # created from a template keeps an unopened codec context.
             template = av.open(io.BytesIO(video_config + pending[0].packet.data), format="h264")
@@ -124,6 +135,18 @@ class Recorder:
                 self._mux(container, astream, packet, base, last_pts, "a")
                 self.stats.audio_packets += 1
 
+        def close_container():
+            nonlocal container, template, vstream, astream, base, written_bytes
+            if container is not None:
+                container.close()
+                written_bytes += self.part_path(part).stat().st_size
+                self.stats.duration_us += max(last_pts["v"], 0)
+            if template is not None:
+                template.close()
+            container = template = vstream = astream = None
+            base = None
+            last_pts["v"] = last_pts["a"] = -1
+
         try:
             pending_since = None
             while True:
@@ -137,6 +160,12 @@ class Recorder:
                 if event is None:
                     break
                 kind = event.kind
+                if container is not None and (
+                        (kind == hubmod.SESSION and event.session != session) or
+                        (kind == hubmod.VIDEO_CONFIG and event.packet.data != video_config)):
+                    # Resolution or encoder parameters changed (e.g. quality change):
+                    # Matroska cannot switch mid-file, so continue in a new part.
+                    close_container()
                 if kind == hubmod.SESSION:
                     session = event.session
                 elif kind == hubmod.VIDEO_CONFIG:
@@ -166,13 +195,11 @@ class Recorder:
             log.exception("recording %s failed", self.path)
             self.stats.error = f"{type(exc).__name__}: {exc}"
         finally:
-            if container is not None:
-                container.close()
-            if template is not None:
-                template.close()
-            self.stats.duration_us = max(last_pts["v"], 0)
-            if self.path.exists():
-                self.stats.bytes = self.path.stat().st_size
+            try:
+                close_container()
+            except Exception as exc:  # finalising the last file must not hide the earlier error
+                self.stats.error = self.stats.error or f"{type(exc).__name__}: {exc}"
+            self.stats.bytes = written_bytes
 
     @staticmethod
     def _mux(container, stream, packet, base, last_pts, key) -> None:

@@ -391,6 +391,8 @@ restore_quest_tweaks() {
   fi
   if [[ ${QUEST_TWEAK_PROX} == true ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.prox_open || true
+    # Newer Horizon OS ignores prox_open; automation_disable hands the sensor back to the hardware.
+    run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell am broadcast -a com.oculus.vrpowermanager.automation_disable || true
   fi
   if [[ -n ${QUEST_CAPTURE_WIDTH} ]]; then
     run_cmd_quiet "${ADB_BIN}" -s "${endpoint}" shell setprop debug.oculus.capture.width "" || true
@@ -677,6 +679,17 @@ if [[ ${ACTION} == "start" ]]; then
     exit 1
   else
     log_warn "scrcpy lacks hardware decoding; run bootstrap_binaries.sh to update to 5.0.1."
+  fi
+fi
+
+if [[ ${ACTION} == "start" ]]; then
+  # Quest Hub GUI (python -m questhub) holds this lock while it runs.
+  qh_lock="${QH_DATA_DIR:-${HOME}/.questhub}/questhub.lock"
+  if [[ -f ${qh_lock} ]]; then
+    qh_pid=$(tr -cd '0-9' < "${qh_lock}")
+    if [[ -n ${qh_pid} ]] && kill -0 "${qh_pid}" 2>/dev/null; then
+      log_warn "Quest Hub GUI is running (pid ${qh_pid}); capturing the same headsets twice doubles their encoder and Wi-Fi load"
+    fi
   fi
 fi
 

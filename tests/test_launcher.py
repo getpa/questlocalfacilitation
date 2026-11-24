@@ -122,6 +122,16 @@ if os.getenv('HOLD'):
         self.assertIn('--audio-dup', result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_warns_when_gui_is_running(self):
+        data = self.dir / 'qhdata'
+        data.mkdir()
+        (data / 'questhub.lock').write_text(str(os.getpid()))
+        result = self.run_launcher('--dry-run', QH_DATA_DIR=str(data))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Quest Hub GUI is running', result.stderr)
+        (data / 'questhub.lock').write_text('999999')
+        self.assertNotIn('Quest Hub GUI is running', self.run_launcher('--dry-run', QH_DATA_DIR=str(data)).stderr)
+
     def test_quality_presets_and_overrides(self):
         expected = {
             'low': ['--max-size=960', '--max-fps=15', '--video-bit-rate=1500K'],

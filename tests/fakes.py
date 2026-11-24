@@ -21,6 +21,8 @@ class FakeHeadset:
         self.tcpip = False
         self.commands: list[tuple] = []
         self.shell_output: dict[str, str] = {}   # substring of a shell command -> its output
+        self.networks: dict[str, tuple] = {}     # ssid -> (security, passphrase) accepted by "the AP"
+        self.stdin_scripts: list[str] = []
 
 
 class FakeAdbWorld:
@@ -53,8 +55,10 @@ class FakeAdb:
             raise AdbError(("-s", str(self.serial)), 1, "device not found")
         return h
 
-    async def run(self, *args, timeout=30, check=True):
+    async def run(self, *args, timeout=30, check=True, input=None):
         self.world.log.append((self.serial, args))
+        if args[:2] == ("shell", "sh") and input is not None:
+            return self._script(self._headset(), input.decode())
         if args[0] == "connect":
             endpoint = args[1]
             out = self.world.connect_result.get(endpoint)
@@ -76,6 +80,18 @@ class FakeAdb:
             return "restarting in USB mode"
         if args[0] == "shell":
             return self._shell(h, args[1])
+        return ""
+
+    def _script(self, h: FakeHeadset, script: str) -> str:
+        import shlex
+        h.stdin_scripts.append(script)
+        argv = shlex.split(script)
+        if argv[:3] == ["cmd", "wifi", "connect-network"]:
+            ssid, security = argv[3], argv[4]
+            passphrase = argv[5] if len(argv) > 5 else ""
+            if h.networks.get(ssid) == (security, passphrase):
+                h.ssid = ssid
+            return ""
         return ""
 
     def _shell(self, h: FakeHeadset, cmd: str) -> str:

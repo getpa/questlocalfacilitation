@@ -62,6 +62,8 @@ function connectEvents() {
     if (ev.type === 'provisioning_progress') {
       if (ev.data.step === 'done') toast(`${alias}: Wi-Fi 化しました（${ev.data.ip}${ev.data.ssid ? ' / ' + ev.data.ssid : ''}）`, 'ok');
       if (ev.data.step === 'error') toast(`${ev.data.usb_id}: ${ev.data.error}`, 'bad');
+      if (ev.data.step === 'wifi_connect') toast(`${alias}: ${ev.data.ssid} に接続しています…`);
+      if (ev.data.step === 'wifi_done') toast(`${alias}: ${ev.data.ssid} に接続しました（${ev.data.ip || 'IP 取得中'}）`, 'ok');
     }
     if (ev.type === 'scan_progress') {
       $('#scan-progress').textContent = ev.data.step === 'done' ? `完了: ポート開放 ${ev.data.found} 台、登録 ${ev.data.identified} 台`
@@ -366,6 +368,25 @@ $('#enable-wifi-selected').onclick = () => {
   toast('Wi-Fi 化しています…');
   act(() => api('POST', '/api/usb/enable-wifi', { usb_ids: ids }));
 };
+async function setWifiNetwork(ids) {
+  const ssid = $('#wifi-ssid').value;
+  const security = $('#wifi-security').value;
+  const passphrase = $('#wifi-pass').value;
+  if (!ssid) { toast('SSID を入力してください', 'warn'); return; }
+  if (security !== 'open' && (passphrase.length < 8 || passphrase.length > 63)) { toast('パスワードは 8〜63 文字です', 'warn'); return; }
+  if (ids && !ids.length) { toast('端末を選んでください', 'warn'); return; }
+  const body = { ssid, security, passphrase: security === 'open' ? '' : passphrase, enable_adb: $('#wifi-then-adb').checked };
+  if (ids) body.usb_ids = ids;
+  $('#wifi-pass').value = '';            // do not keep the passphrase in the page
+  const r = await act(() => api('POST', '/api/usb/wifi-network', body));
+  if (!r) return;
+  const failed = r.filter((x) => !x.ok);
+  if (failed.length) toast(`${failed.length} 台で失敗しました: ${failed.map((x) => x.error).join(' / ')}`, 'bad');
+  else toast(`${r.length} 台を ${ssid} に接続しました`, 'ok');
+}
+$('#wifi-security').onchange = () => { $('#wifi-pass').disabled = $('#wifi-security').value === 'open'; };
+$('#wifi-net-form').onsubmit = (e) => { e.preventDefault(); setWifiNetwork($$('.usb-pick:checked').map((x) => x.value)); };
+$('#wifi-net-all').onclick = () => setWifiNetwork(null);
 $('#enable-wifi-all').onclick = () => { toast('Wi-Fi 化しています…'); act(() => api('POST', '/api/usb/enable-wifi', {})); };
 $('#scan').onclick = () => { $('#scan-progress').textContent = '開始…'; act(() => api('POST', '/api/scan', { cidr: $('#scan-cidr').value.trim() || null })); };
 $('#tsv-file').onchange = async (e) => {

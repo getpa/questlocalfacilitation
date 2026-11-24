@@ -11,6 +11,7 @@
   - v0.9: **M2〜M6 実装完了**（§11 実装状況と設計からの差分）
   - v0.10: Quest の黒画面の原因調査と対策（§4.10）
   - v0.11: 装着中の再現で原因を特定（Strata レイヤーの flags 0x80）。パススルーを原因から外し、Meta の録画停止中は復旧を待機（§4.10）
+  - v0.12: USB 接続中の端末の Wi-Fi 接続先を SSID とパスワードで設定（§4.9.1）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -413,6 +414,21 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 **保存**
 - 最新値は台帳（`ssid`, `bssid`, `band`, `rssi`, `wifi_seen_at`）、変更は観測履歴に残す（`registry.observe(..., wifi=...)` 経由。SSID が変わったら `SsidChanged` を発行）。
 - TSV エクスポートには含めない（既存CLIの形式を変えないため）。別途 CSV で一覧を書き出せる。
+
+#### 4.9.1 Wi-Fi の接続先の設定（USB 接続中の端末）
+
+**調査（Quest 3 / Android 14、adb shell = uid 2000）**
+- `cmd wifi connect-network <ssid> open|wpa2|wpa3 [<passphrase>]` は shell で実行できる（権限エラーにならない）。ネットワークを保存して接続する。
+- `cmd wifi add-network` は `SecurityException`（保存だけはできない）。`add-suggestion` は承認に root が必要で、使えない。
+- `list-networks`・`status` は読める。`forget-network` もヘルプ上は shell で使える（未使用）。
+
+**実装（`devices/wifi_config.py`、`ProvisioningService.configure_wifi`、`POST /api/usb/wifi-network`）**
+- 「端末」タブの「Wi-Fi の接続先を設定」で SSID・セキュリティ・パスワードを入力し、選んだ USB 端末（またはすべて）に送る。必要なら続けて Wi-Fi 化（`adb tcpip`）する。
+- **USB 接続中の端末だけが対象。** Wi-Fi ADB 経由で接続先を変えると、その接続が切れるため。
+- **パスワードの扱い**: `adb shell sh` の標準入力でヘッドセットに送るので、adb の引数（`ps` で見える）、エラーメッセージ、ログ、イベント、API の応答に出ない。Quest Hub には保存しない。画面の入力欄も送信直後に消す。SSID とパスワードはヘッドセットの `sh` 用にシングルクォートで囲む。
+- 送信後、`cmd wifi status` が指定の SSID を報告するまで最大 30 秒待つ。報告されなければ「接続できませんでした（現在: ○○）」とする。
+- **SSID の警告との関係**: 送る前に、その端末の SSID の基準を新しい SSID にする（意図した変更なので警告しない）。接続に失敗したら基準を元に戻す。
+- 制限: 隠し SSID、WPA2 Enterprise（802.1X）、WEP には対応しない。
 
 ---
 

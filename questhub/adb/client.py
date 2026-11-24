@@ -52,13 +52,14 @@ class Adb:
             argv += ["-s", self.serial]
         return argv + list(args)
 
-    async def run(self, *args: str, timeout: float = 30, check: bool = True) -> str:
+    async def run(self, *args: str, timeout: float = 30, check: bool = True, input: bytes | None = None) -> str:
+        """`input` is written to adb's stdin (e.g. a script for `shell sh`, keeping secrets out of argv)."""
         async with _sem():
             proc = await asyncio.create_subprocess_exec(
                 *self._argv(args), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-                stdin=asyncio.subprocess.DEVNULL)
+                stdin=asyncio.subprocess.PIPE if input is not None else asyncio.subprocess.DEVNULL)
             try:
-                out, _ = await asyncio.wait_for(proc.communicate(), timeout)
+                out, _ = await asyncio.wait_for(proc.communicate(input), timeout)
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()

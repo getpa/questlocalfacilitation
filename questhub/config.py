@@ -22,6 +22,8 @@ class Settings:
     auto_stream: bool = True               # start streaming when a headset connects
     record_dir: str = str(paths.PROJECT_ROOT / "recordings")
     disk_min_free_gb: float = 5.0
+    record_imu: bool = True                # also record the headset IMU (CSV next to the video)
+    imu_rate_hz: int = 100                 # IMU rows per second (the headset delivers ~800 samples/s)
     telemetry_interval: float = 60.0
     adb_concurrency: int = 8
     reconnect_max_backoff: float = 30.0

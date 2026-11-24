@@ -1,6 +1,6 @@
 """Use case: recording sessions (docs/GUI_DESIGN.md §4.7).
 
-recordings/<session>/<alias>_<YYYYmmdd-HHMMSS>[_partNN].mkv plus session.json.
+recordings/<session>/<alias>_<YYYYmmdd-HHMMSS>[_partNN].mkv (+ .imu.csv, the headset IMU) plus session.json.
 Quality changes are locked while a headset is being recorded. Free disk space
 is watched; below the threshold every recording stops.
 """
@@ -18,6 +18,7 @@ import time
 from questhub.config import Settings
 from questhub.core import events as ev
 from questhub.devices.registry import Registry
+from questhub.imu.recorder import ImuRecorder
 from questhub.record.recorder import Recorder
 from questhub.services.streaming import StreamingService
 
@@ -39,6 +40,7 @@ class RecordingService:
         self.settings = settings
         self.bus = streaming.bus
         self.active: dict[str, Recorder] = {}
+        self.imu: dict[str, ImuRecorder] = {}
         self.session: dict | None = None
         self._task: asyncio.Task | None = None
         self._disk_warned = False
@@ -108,9 +110,14 @@ class RecordingService:
             recorder.start()
             sup.locked_reason = LOCK_REASON
             self.active[serial] = recorder
-            self.session["devices"].setdefault(serial, []).append({
-                "alias": row.get("alias"), "ip": row.get("ip"), "ssid": row.get("ssid"),
-                "quality": sup.options.quality, "file": str(path), "started_at": time.time()})
+            entry = {"alias": row.get("alias"), "ip": row.get("ip"), "ssid": row.get("ssid"),
+                     "quality": sup.options.quality, "file": str(path), "started_at": time.time()}
+            if self.settings.record_imu:
+                imu = self._imu_factory(path.with_suffix(".imu.csv"), sup, serial)
+                imu.start()
+                self.imu[serial] = imu
+                entry.update(imu_file=str(imu.path), imu_rate_hz=imu.rate_hz)
+            self.session["devices"].setdefault(serial, []).append(entry)
             try:
                 await sup.request_key_frame()  # start the file now instead of at the next GOP
             except Exception as exc:
@@ -118,6 +125,13 @@ class RecordingService:
             started.append(serial)
         self._write_session()
         return {"session": self.session["name"], "started": started}
+
+    def _imu_factory(self, path: Path, sup, serial: str) -> ImuRecorder:
+        def adb_fn():
+            target = sup.target_fn()
+            return sup.adb.for_serial(target) if target else None
+        rate = max(1, min(800, int(self.settings.imu_rate_hz or 100)))
+        return ImuRecorder(path, adb_fn, rate_hz=rate, serial=serial)
 
     def _unique_path(self, stem: str) -> Path:
         """Distinct file per recording even for equal aliases or restarts within a second."""
@@ -137,6 +151,8 @@ class RecordingService:
             if recorder is None:
                 continue
             stats = await recorder.stop()
+            imu = self.imu.pop(serial, None)
+            imu_stats = await imu.stop() if imu else None
             sup = self.streaming.supervisor(serial)
             if sup:
                 sup.locked_reason = None
@@ -144,6 +160,9 @@ class RecordingService:
             entry.update(stopped_at=time.time(), parts=stats.parts, bytes=stats.bytes,
                          duration_s=round(stats.duration_us / 1e6, 1), video_packets=stats.video_packets,
                          audio_packets=stats.audio_packets, error=stats.error, reason=reason)
+            if imu_stats is not None:
+                entry.update(imu_rows=imu_stats.rows, imu_samples=imu_stats.samples,
+                             imu_restarts=imu_stats.restarts, imu_error=imu_stats.error)
             stopped[serial] = entry
             self.bus.publish(ev.RECORDING_STOPPED, serial, **{k: v for k, v in entry.items() if k != "parts"})
         if self.session:
@@ -167,7 +186,9 @@ class RecordingService:
             active.append({"serial": serial, "file": recorder.stats.parts[-1] if recorder.stats.parts else str(recorder.path),
                            "parts": len(recorder.stats.parts), "bytes": size,
                            "elapsed_s": round(time.time() - (recorder.stats.started_at or time.time()), 1),
-                           "video_packets": recorder.stats.video_packets, "error": recorder.stats.error})
+                           "video_packets": recorder.stats.video_packets, "error": recorder.stats.error,
+                           "imu_rows": self.imu[serial].stats.rows if serial in self.imu else None,
+                           "imu_error": self.imu[serial].stats.error if serial in self.imu else None})
         return {"session": self.session["name"] if self.session else None, "active": active,
                 "free_gb": round(self.free_gb() or 0, 1), "dir": str(self.root)}
 

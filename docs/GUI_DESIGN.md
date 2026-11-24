@@ -15,6 +15,7 @@
   - v0.13: Wi-Fi 設定のダイアログ表示中も Meta が録画を止めることを確認（§4.10）
   - v0.14: Windows 対応（GUI のみ。インストーラー `install.ps1`、起動 `questhub.cmd`、§9.8）
   - v0.15: Windows 11 ではスマート アプリ コントロールをオフにする必要があることを追記（§9.8）
+  - v0.16: ヘッドセットの IMU を録画と一緒に記録（§4.11）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -495,6 +496,27 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 **近接センサーの戻し方（重要）**: `prox_close` を送ると、ヘッドセットは解除されるまで「装着中」扱いのままになる（画面が消えず、自動スリープもしない）。現行の Horizon OS（ビルド 207）は `prox_open` を受け付けないことを確認した（仮想の近接状態が CLOSE のまま）。`com.oculus.vrpowermanager.automation_disable` を送ると DISABLED（実際のセンサーに従う）に戻る。GUI は、復旧で `prox_close` を使った端末について、表示停止・授業終了・終了時に必ずこの手順で戻す。CLI の `quest_os_tweaks.sh restore` とランチャー終了時の復元にも、同じ手順を追加した。
 
 **限界**: Meta が録画を止めている間（メニュー・アプリ起動）と、保護レイヤーの表示中は、Quest 側の仕様なのでツールからは映像を戻せない。黒画面であることと原因を表示するにとどめる。授業では、Meta ボタンのメニューやアプリの起動直後に 10〜20 秒ほど映像が途切れることを、あらかじめ講師・TA に伝えておく。
+
+### 4.11 ヘッドセットの IMU の記録（2026-11-25）
+
+**調査（Quest 3、Horizon OS、Android 14 / SDK 34）**
+- `dumpsys sensorservice` に、ヘッドセットの IMU が Android のセンサーとして出ている: `oculus.sensor.hmd_imu.2`（type 65537、名前は較正値を含む JSON、チップ ICM45688）。通常の登録で最大 100Hz と表示されるが、実際は**要求レートに関係なく約 800Hz**（間隔 1.25ms）で届く。**権限は不要**（`perm: n/a`）。
+- 値は 16 個: `[温度℃, 加速度 x y z (m/s²), 角速度 x y z (rad/s), 0 × 9]`。タイムスタンプは**マイクロ秒**で、CLOCK_MONOTONIC とも elapsedRealtime とも違う独自の時計（実機で CLOCK_MONOTONIC と約 9.5 秒ずれていた）。
+- ほかのセンサーはダブルタップ検出と IAD（レンズ間隔）だけ。頭の位置・向き（6DoF）は Android のセンサーには無い（トラッキングサービスの内部）。
+- adb にセンサーの値を流すコマンドは無い（`cmd sensorservice` は uid の状態の操作だけ）。
+
+**方式**: scrcpy のサーバーと同じく、小さな Java プログラム（`questhub/imu/java/questhub/ImuStream.java`）を DEX にして端末へ送り、`app_process` で adb shell ユーザーとして動かす。system context を作って `SystemSensorManager` からセンサーを登録し、値を標準出力へ書く（`adb exec-out`）。
+- Android の API は**すべてリフレクションと `java.lang.reflect.Proxy`**（`SensorEventListener` の実装）で呼ぶ。Android SDK なしで、普通の JDK でコンパイルできる。
+- 端末側で指定レートの区間ごとに平均する（既定 100Hz。`n` = 平均したサンプル数）。800Hz のままでは 1 台約 100KB/s になるため。
+- 約 1 秒ごとに `# sync t=<センサー時刻>` を出してすぐ flush する。PC はその行を読んだ時刻とセンサー時刻の差を記録し、**直近 30 回の最小値**をオフセットに使う（遅延の揺れを除き、時計のずれに追従する）。CSV の `host_time` は PC の時計で、録画の `started_at` と比べられる。
+- 出力は毎秒 5 回 flush する。停止時は PC 側のプロセスを止めたうえで `pkill -f questhub.ImuStream` で端末側も確実に止める（端末側は、次に書いたときにパイプの切断に気づいて自分でも終わる）。
+- 接続が切れたら、間隔を延ばしながら再接続し、CSV に `# restart N` を書いて続ける。
+
+**DEX のビルド**: `questhub/imu/questhub-imu.dex`（約 9KB）をリポジトリに入れる。利用者は JDK 不要。`scripts/build_imu_helper.sh` が版を固定した OpenJDK（conda-forge、`openjdk=17.0.21.1`）と d8（Google Maven の r8 8.13.25、SHA-256 固定）でソースから作り直す。出力は再現可能で、CI（macOS）が `--check` で「ソースから作った DEX がコミット済みのものと同じ」ことを確かめる。端末には内容のハッシュ付きの名前（`/data/local/tmp/questhub-imu-<sha先頭12桁>.dex`）で置くので、版が変われば自動で送り直す。
+
+**録画との連携**: 設定 `record_imu`（既定 true）と `imu_rate_hz`（既定 100、1〜800）。録画を開始すると、映像と同じ名前の `.imu.csv` を作って記録し、録画の停止で止める。`session.json` には `imu_file`・`imu_rate_hz`・`imu_rows`・`imu_samples`・`imu_restarts`・`imu_error` を書く。「録画中」の表に IMU の行数を出す。
+
+**検証**: 実機（USB / Wi-Fi）で 5 秒の記録 → 100Hz で欠落なし、停止後に端末側のプロセスが残らないことを確認。GUI の API で録画を開始・停止し、MKV と `.imu.csv`（8 秒で 741 行）が同じフォルダにでき、`session.json` に記録されることを確認した。装着して動かしたときの値の妥当性（軸の向きなど）は未確認（静止時の加速度の大きさ ≈ 9.8 m/s² と角速度 ≈ 0 は確認）。IMU とヘッドセットの軸の関係は、センサー名の JSON の `DeviceFromImu`（約 20° 傾いた回転）に出ている。
 
 ## 5. API（案）
 

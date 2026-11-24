@@ -148,7 +148,8 @@ class RecordingNamesTests(unittest.TestCase):
                 async def request_key_frame():
                     pass
                 sup.request_key_frame = request_key_frame
-            settings = Settings(record_dir=tmp.name, disk_min_free_gb=0.0)
+            # file names only: no IMU helper (this test drops recorders without stopping them)
+            settings = Settings(record_dir=tmp.name, disk_min_free_gb=0.0, record_imu=False)
             rec = RecordingService(streaming, reg, settings)
             first = await rec.start(None, "lesson")
             paths1 = [str(r.path) for r in rec.active.values()]

@@ -241,6 +241,13 @@ class RecordingServiceTests(unittest.TestCase):
             for sup in streaming.supervisors.values():
                 await sup.wait_streaming(10)
             rec = RecordingService(streaming, reg, settings)
+            from questhub.imu.recorder import ImuRecorder
+            from tests.test_imu import HELPER_OUTPUT, FakeProcess
+
+            async def fake_helper(adb):
+                return FakeProcess(HELPER_OUTPUT.splitlines())
+            rec._imu_factory = lambda path, sup, serial: ImuRecorder(path, lambda: "adb", serial=serial,
+                                                                     spawn=fake_helper)
             result = await rec.start(None, "lesson 01")
             locked = {s: sup.locked_reason for s, sup in streaming.supervisors.items()}
             with self.assertRaises(RuntimeError):
@@ -270,6 +277,13 @@ class RecordingServiceTests(unittest.TestCase):
         self.assertIn("Seat_01_A_", Path(stopped["S1"]["parts"][0]).name)
         data = json.loads((Path(sessions[0]["dir"]) / "session.json").read_text(encoding="utf-8"))
         self.assertEqual(sorted(data["devices"]), ["S1", "S2"])
+        for serial in ("S1", "S2"):
+            entry = data["devices"][serial][0]
+            self.assertTrue(entry["imu_file"].endswith(".imu.csv"), "the IMU is recorded next to the video")
+            self.assertEqual(Path(entry["imu_file"]).stem, Path(entry["file"]).stem + ".imu")
+            self.assertGreaterEqual(entry["imu_rows"], 2)
+            self.assertIn("host_time,t_us", Path(entry["imu_file"]).read_text(encoding="utf-8"))
+        self.assertIn("imu_rows", status["active"][0])
         self.assertIsNotNone(data["stopped_at"])
 
     def test_recorder_splits_parts_when_resolution_changes(self):

@@ -15,7 +15,7 @@ Commands:
   restore  Revert tweaks (guardian resume, prox open, clear capture props)
 
 Options:
-  --config FILE         Override device list (default: scripts/quest_devices.tsv)
+  --config FILE         Override device list (default: legacy/quest_devices.tsv)
   --no-guardian         Skip guardian pause/resume
   --no-prox             Skip proximity broadcast
   --capture-width PX    Set debug.oculus.capture.width (engage only)

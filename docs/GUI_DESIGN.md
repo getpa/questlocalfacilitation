@@ -11,7 +11,7 @@
   - v0.9: **M2〜M6 実装完了**（§11 実装状況と設計からの差分）
   - v0.10: Quest の黒画面の原因調査と対策（§4.10）
   - v0.11: 装着中の再現で原因を特定（Strata レイヤーの flags 0x80）。パススルーを原因から外し、Meta の録画停止中は復旧を待機（§4.10）
-- 対象: 既存CLI（`scripts/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
+- 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
 ---
@@ -240,7 +240,7 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 
 - 観測履歴テーブル `observations(serial, source, ip, ssid, bssid, at)` に変更の履歴を残す（トラブルシュート用。直近N件に制限）。
 - IP更新の経路: (a) Wi-Fi化時、(b) LANスキャン、(c) 手入力 — いずれも `registry.observe()` を通る。
-- `scripts/quest_devices.tsv` 形式で読み込み・書き出しでき、CLIとの互換を保つ。
+- `legacy/quest_devices.tsv` 形式で読み込み・書き出しでき、CLIとの互換を保つ。
 - 表の直接編集と、グリッド上のドラッグ＆ドロップによる座席配置。
 
 ### 4.3 R3: 画面表示
@@ -599,7 +599,7 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 
 - **Mambaforge / conda / Homebrew / Xcode Command Line Tools がない素の macOS** で、1コマンドで GUI が起動できる状態にする。
 - 管理者権限（sudo）を使わない。ユーザーのシェル設定（`~/.zshrc` 等）を書き換えない。入れるものはすべて**リポジトリ内**に置き、フォルダを消せば元に戻る。
-- 既存の CLI（`scripts/*.sh`）が参照する `./.mamba-env` をそのまま作るので、CLI もこのインストーラーで使えるようになる。
+- 旧版の CLI（`legacy/*.sh`）が参照する `./.mamba-env` をそのまま作るので、CLI もこのインストーラーで使えるようになる。
 
 ### 9.2 素の macOS での落とし穴（現状の調査結果）
 

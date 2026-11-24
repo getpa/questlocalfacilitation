@@ -11,7 +11,7 @@ usage() {
 Usage: keep_awake.sh [--config FILE] [--enable|--disable]
 
 Options:
-  --config FILE  Quest device list (default: scripts/quest_devices.tsv)
+  --config FILE  Quest device list (default: legacy/quest_devices.tsv)
   --enable       Keep device awake (default)
   --disable      Restore default sleep behaviour
 

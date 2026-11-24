@@ -48,7 +48,7 @@ status options:
   --skip-connect         監視時に adb connect を行わない
 
 Environment overrides (必要に応じて export してください):
-  CONFIG             = ./scripts/quest_devices.tsv 以外の端末リスト
+  CONFIG             = ./legacy/quest_devices.tsv 以外の端末リスト
   MAX_DEVICES        = 起動上限 (デフォルト: 50)
   GRID_COLUMNS       = 自動配置時の列数 (デフォルト: 30台以下は5、31台以上は10)
   GRID_ROWS          = 自動配置時の行数 (デフォルト: 30台以下は6、31台以上は台数/10の切り上げ)

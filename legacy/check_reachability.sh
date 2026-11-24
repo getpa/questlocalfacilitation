@@ -11,7 +11,7 @@ usage() {
 Usage: check_reachability.sh [--config FILE] [--ping] [--adb]
 
 Options:
-  --config FILE  Path to TSV with alias and endpoint columns (default: scripts/quest_devices.tsv)
+  --config FILE  Path to TSV with alias and endpoint columns (default: legacy/quest_devices.tsv)
   --ping         Test reachability via ICMP ping
   --adb          Test reachability via adb connect/get-state
 

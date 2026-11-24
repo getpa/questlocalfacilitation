@@ -48,6 +48,7 @@ $LockFile = Join-Path $Root 'locks\conda-win-64.txt'
 $SpecFile = Join-Path $Root 'environment-windows.yml'
 $SpecStamp = Join-Path $EnvDir '.questhub-spec.sha256'
 $ScrcpyDir = Join-Path $EnvDir 'vendor\scrcpy'
+$ScrcpyRequiredFiles = @('adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'scrcpy.exe')
 $GuiPorts = @(8765, 8443, 8766)
 
 function Log([string]$Message) { Write-Host "[install] $Message" }
@@ -92,6 +93,22 @@ function Remove-Safely([string]$Target) {
         Remove-Item -LiteralPath $full -Recurse -Force
         Log "Removed $full"
     }
+}
+
+# The adb server keeps adb.exe locked, and "adb kill-server" returns before the process has exited.
+function Stop-BundledAdb {
+    $adb = Join-Path $ScrcpyDir 'adb.exe'
+    if (-not (Test-Path -LiteralPath $adb)) { return }
+    & $adb kill-server 2>$null | Out-Null
+    $prefix = [IO.Path]::GetFullPath($ScrcpyDir).TrimEnd('\') + '\'
+    for ($i = 0; $i -lt 50; $i++) {
+        $running = @(Get-Process -Name adb -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Path -and $_.Path.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) })
+        if ($running.Count -eq 0) { return }
+        if ($i -eq 30) { $running | Stop-Process -Force -ErrorAction SilentlyContinue }   # still there after 3 s
+        Start-Sleep -Milliseconds 100
+    }
+    Warn 'adb.exe is still running; close Quest Hub and try again if removal fails'
 }
 
 function New-TempDir {
@@ -213,8 +230,12 @@ function Install-Scrcpy {
     if ((Get-Setting 'QH_SKIP_BINARIES' '0') -eq '1') { Log 'Skipping adb/scrcpy (QH_SKIP_BINARIES=1)'; return }
     $stamp = Join-Path $ScrcpyDir 'questhub.version'
     $server = Join-Path $ScrcpyDir 'scrcpy-server'
-    if ((Test-Path -LiteralPath $stamp) -and ((Get-Content -LiteralPath $stamp -Raw).Trim() -eq $ScrcpyVersion) -and
-        (Test-Path -LiteralPath $server) -and ((Get-Sha256 $server) -eq $ScrcpyServerSha256)) {
+    $complete = (Test-Path -LiteralPath $stamp) -and ((Get-Content -LiteralPath $stamp -Raw).Trim() -eq $ScrcpyVersion) -and
+        (Test-Path -LiteralPath $server) -and ((Get-Sha256 $server) -eq $ScrcpyServerSha256)
+    foreach ($exe in $ScrcpyRequiredFiles) {   # a deleted or quarantined adb.exe must be repaired by a re-run
+        if (-not (Test-Path -LiteralPath (Join-Path $ScrcpyDir $exe))) { $complete = $false }
+    }
+    if ($complete) {
         Log "scrcpy $ScrcpyVersion already installed"
         return
     }
@@ -227,6 +248,7 @@ function Install-Scrcpy {
         $inner = Get-ChildItem -LiteralPath $tmp -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'scrcpy-server') } | Select-Object -First 1
         if (-not $inner) { Die 'Unexpected scrcpy archive layout' }
         if ((Get-Sha256 (Join-Path $inner.FullName 'scrcpy-server')) -ne $ScrcpyServerSha256) { Die 'scrcpy-server checksum mismatch' }
+        Stop-BundledAdb
         Remove-Safely $ScrcpyDir
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $ScrcpyDir) | Out-Null
         Move-Item -LiteralPath $inner.FullName -Destination $ScrcpyDir
@@ -316,8 +338,7 @@ function Invoke-Uninstall {
     $what = "$ToolsDir and $EnvDir"
     if ($PurgeData) { $what += " and $DataDir (registry, certificates, settings)" }
     if (-not (Confirm-Action "Remove $what?")) { Log 'Cancelled'; return }
-    $adb = Join-Path $ScrcpyDir 'adb.exe'
-    if (Test-Path -LiteralPath $adb) { & $adb kill-server 2>$null | Out-Null }   # the adb server keeps adb.exe locked
+    Stop-BundledAdb
     Remove-Safely $EnvDir
     Remove-Safely $ToolsDir
     if ($PurgeData) { Remove-Safely $DataDir }

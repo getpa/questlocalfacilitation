@@ -75,6 +75,15 @@ class WindowsInstallerFilesTests(unittest.TestCase):
         for switch in ("$Doctor", "$Strict", "$Uninstall", "$PurgeData", "$Yes"):
             self.assertIn(switch, ps1)
 
+    def test_installer_handles_a_locked_or_missing_adb(self):
+        ps1 = (ROOT / "install.ps1").read_text(encoding="utf-8")
+        self.assertIn("'adb.exe'", re.search(r"\$ScrcpyRequiredFiles = @\(([^)]*)\)", ps1).group(1),
+                      "a missing adb.exe makes the bundle incomplete, so a re-run repairs it")
+        self.assertIn("foreach ($exe in $ScrcpyRequiredFiles)", ps1)
+        # adb kill-server returns before adb.exe is unlocked: wait for it before every removal of the bundle
+        self.assertEqual(ps1.count("Stop-BundledAdb\n") + ps1.count("Stop-BundledAdb\r\n"), 2)
+        self.assertIn("function Stop-BundledAdb", ps1)
+
     def test_launchers_and_line_endings(self):
         attrs = (ROOT / ".gitattributes").read_text(encoding="utf-8")
         for rule in ("*.cmd text eol=crlf", "*.ps1 text eol=crlf", "*.sh text eol=lf"):

@@ -4,8 +4,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import subprocess
-
-DEFAULT_INTERFACES = ("en0", "en1", "en2", "en3", "en4", "en5", "en6", "en7", "en8")
+import sys
 
 
 def mask_to_prefix(mask: str) -> int:
@@ -14,20 +13,56 @@ def mask_to_prefix(mask: str) -> int:
     return sum(bin(int(octet)).count("1") for octet in mask.split("."))
 
 
-def local_networks() -> list[ipaddress.IPv4Interface]:
-    """IPv4 interfaces of this Mac (ifconfig), excluding loopback and link-local."""
-    try:
-        out = subprocess.run(["ifconfig"], capture_output=True, text=True, timeout=5).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+def _usable(iface: ipaddress.IPv4Interface) -> bool:
+    return not (iface.ip.is_loopback or iface.ip.is_link_local)
+
+
+def parse_ifconfig(out: str) -> list[ipaddress.IPv4Interface]:
     result = []
     for line in out.splitlines():
         parts = line.split()
         if len(parts) >= 4 and parts[0] == "inet" and parts[2] == "netmask":
             iface = ipaddress.ip_interface(f"{parts[1]}/{mask_to_prefix(parts[3])}")
-            if not (iface.ip.is_loopback or iface.ip.is_link_local):
+            if _usable(iface):
                 result.append(iface)
     return result
+
+
+# Locale-independent (unlike ipconfig, whose labels are translated on Japanese Windows).
+WINDOWS_IP_COMMAND = ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                      "Get-NetIPAddress -AddressFamily IPv4 | Select-Object IPAddress,PrefixLength "
+                      "| ConvertTo-Json -Compress"]
+
+
+def parse_windows_ip(out: str) -> list[ipaddress.IPv4Interface]:
+    import json
+    try:
+        data = json.loads(out or "[]")
+    except ValueError:
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    result = []
+    for item in data:
+        try:
+            iface = ipaddress.ip_interface(f"{item['IPAddress']}/{int(item['PrefixLength'])}")
+        except (KeyError, TypeError, ValueError):
+            continue
+        if _usable(iface):
+            result.append(iface)
+    return result
+
+
+def local_networks() -> list[ipaddress.IPv4Interface]:
+    """IPv4 interfaces of this computer, excluding loopback and link-local."""
+    windows = sys.platform == "win32"
+    command = WINDOWS_IP_COMMAND if windows else ["ifconfig"]
+    try:
+        kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if windows else {}
+        out = subprocess.run(command, capture_output=True, text=True, timeout=10, **kwargs).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return parse_windows_ip(out) if windows else parse_ifconfig(out)
 
 
 def hosts_to_scan(network: ipaddress.IPv4Network, exclude: set[str], limit: int = 4096) -> list[str]:

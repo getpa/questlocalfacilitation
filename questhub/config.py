@@ -36,7 +36,7 @@ class Settings:
     def load(cls, path: Path) -> "Settings":
         settings = cls()
         if path.exists():
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             known = {f.name for f in fields(cls)}
             for key, value in data.items():
                 if key in known:
@@ -46,7 +46,7 @@ class Settings:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False))
+        tmp.write_text(json.dumps(asdict(self), indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(path)
 
     def update(self, values: dict) -> list[str]:

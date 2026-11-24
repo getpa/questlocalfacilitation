@@ -29,7 +29,7 @@ PROGRESS_INTERVAL = 5.0
 
 
 def safe_name(text: str) -> str:
-    return re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE).strip("_") or "session"
+    return re.sub(r"[^\w.-]+", "_", text, flags=re.UNICODE).strip("_.") or "session"
 
 
 class RecordingService:
@@ -158,7 +158,7 @@ class RecordingService:
         if not self.session:
             return
         path = Path(self.session["dir"]) / "session.json"
-        path.write_text(json.dumps(self.session, indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(self.session, indent=2, ensure_ascii=False), encoding="utf-8")
 
     def status(self) -> dict:
         active = []
@@ -175,7 +175,7 @@ class RecordingService:
         sessions = []
         for path in sorted(self.root.glob("*/session.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
             try:
-                data = json.loads(path.read_text())
+                data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
             files = [e for entries in data.get("devices", {}).values() for e in entries]

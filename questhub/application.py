@@ -13,6 +13,7 @@ from questhub.adb import client as adb_client
 from questhub.adb.client import Adb
 from questhub.config import Settings
 from questhub.core.events import EventBus
+from questhub.core.procs import pid_alive
 from questhub.devices import discovery
 from questhub.devices.manager import DeviceManager
 from questhub.devices.registry import Registry
@@ -33,7 +34,7 @@ class AlreadyRunning(RuntimeError):
 
 
 class InstanceLock:
-    """One Quest Hub per Mac; the CLI launcher warns when this lock is held."""
+    """One Quest Hub per computer; the CLI launcher warns when this lock is held."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -42,17 +43,16 @@ class InstanceLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             try:
-                pid = int(self.path.read_text().strip())
-                os.kill(pid, 0)
-                if pid != os.getpid():
-                    raise AlreadyRunning(f"Quest Hub is already running (pid {pid})")
-            except (ValueError, ProcessLookupError, PermissionError):
-                pass
-        self.path.write_text(str(os.getpid()))
+                pid = int(self.path.read_text(encoding="utf-8").strip())
+            except ValueError:
+                pid = None
+            if pid and pid != os.getpid() and pid_alive(pid):
+                raise AlreadyRunning(f"Quest Hub is already running (pid {pid})")
+        self.path.write_text(str(os.getpid()), encoding="utf-8")
 
     def release(self) -> None:
         try:
-            if self.path.read_text().strip() == str(os.getpid()):
+            if self.path.read_text(encoding="utf-8").strip() == str(os.getpid()):
                 self.path.unlink()
         except OSError:
             pass

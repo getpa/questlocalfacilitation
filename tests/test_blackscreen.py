@@ -138,7 +138,7 @@ class SupervisorRecoveryTests(unittest.TestCase):
         self.assertIn("input keyevent KEYCODE_WAKEUP", shell)
         self.assertGreaterEqual(starts, 2, "server restarted")
         self.assertEqual(len(diag_files), 1)
-        self.assertIn("likely cause", diag_files[0].read_text())
+        self.assertIn("likely cause", diag_files[0].read_text(encoding="utf-8"))
         self.assertTrue(any(e["data"].get("cause") for e in events))
         self.assertEqual(events[-1]["data"].get("black"), False)
         self.assertEqual(events[-1]["data"].get("recovered_by"), "restart")

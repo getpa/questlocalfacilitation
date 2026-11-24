@@ -50,3 +50,57 @@ jobs:
         run: ./.mamba-env/bin/python -m unittest discover -s tests -v
       - name: Uninstall
         run: /bin/bash ./install.sh --uninstall --yes && test ! -e .mamba-env && test ! -e .tools
+
+  windows:
+    # Real installation on Windows with the built-in Windows PowerShell 5.1 (no conda, Python or Git Bash used).
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (strict, from lock)
+        run: .\install.ps1 -Strict -Yes
+      - name: Rerun is a no-op
+        run: |
+          .\install.ps1 -Strict -Yes *>&1 | Tee-Object -FilePath rerun.log
+          if (-not (Select-String -Path rerun.log -Pattern 'Environment is up to date')) { exit 1 }
+          if (-not (Select-String -Path rerun.log -Pattern 'scrcpy 5.0.1 already installed')) { exit 1 }
+      - name: Rerun repairs a missing adb.exe
+        run: |
+          Remove-Item .\.mamba-env\vendor\scrcpy\adb.exe
+          .\install.ps1 -Strict -Yes *>&1 | Tee-Object -FilePath repair.log
+          if (-not (Select-String -Path repair.log -Pattern 'Installed scrcpy 5.0.1')) { exit 1 }
+          if (-not (Test-Path .\.mamba-env\vendor\scrcpy\adb.exe)) { exit 1 }
+          exit 0
+      - name: Doctor
+        run: .\install.ps1 -Doctor
+      - name: Offline tests with the project environment
+        run: .\.mamba-env\python.exe -m unittest discover -s tests -v
+      - name: GUI smoke test (serves the admin UI, refuses a second instance)
+        run: |
+          $env:QH_DATA_DIR = Join-Path $env:RUNNER_TEMP 'qhdata'
+          $env:PATH = "$PWD\.mamba-env\vendor\scrcpy;$env:PATH"
+          $p = Start-Process -FilePath .\.mamba-env\python.exe -ArgumentList '-m','questhub','--no-browser','-v' `
+               -PassThru -RedirectStandardOutput gui.out -RedirectStandardError gui.err
+          $ok = $false
+          for ($i = 0; $i -lt 60; $i++) {
+            try {
+              $r = Invoke-WebRequest -Uri http://127.0.0.1:8765/ -UseBasicParsing -TimeoutSec 2
+              if ($r.StatusCode -eq 200 -and $r.Content -match 'Quest Hub') { $ok = $true; break }
+            } catch { }
+            Start-Sleep -Seconds 1
+          }
+          & .\.mamba-env\python.exe -m questhub --no-browser
+          $second = $LASTEXITCODE
+          $alive = -not $p.HasExited
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Content gui.err
+          if (-not $ok) { Write-Host 'admin UI did not respond'; exit 1 }
+          if ($second -ne 1) { Write-Host "second instance exit code $second (expected 1)"; exit 1 }
+          if (-not $alive) { Write-Host 'the lock check terminated the running instance'; exit 1 }
+          exit 0
+      - name: Uninstall
+        run: |
+          .\install.ps1 -Uninstall -Yes
+          if ((Test-Path .mamba-env) -or (Test-Path .tools)) { exit 1 }

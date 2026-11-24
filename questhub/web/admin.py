@@ -44,7 +44,7 @@ def create_admin_app(app: Application) -> FastAPI:
 
     @api.get("/", response_class=HTMLResponse)
     async def index():
-        html = (STATIC / "host/index.html").read_text()
+        html = (STATIC / "host/index.html").read_text(encoding="utf-8")
         return html.replace("{{ADMIN_TOKEN}}", app.admin_token)
 
     # ------------------------------------------------------------ state

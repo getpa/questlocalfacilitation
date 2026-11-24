@@ -294,7 +294,7 @@ class StreamSupervisor:
                     f"likely cause: {cause}", f"summary: {summary}", ""]
             for name, text in sections.items():
                 body += [f"===== {name}", text.rstrip(), ""]
-            path.write_text("\n".join(body))
+            path.write_text("\n".join(body), encoding="utf-8")
         self.black_diag_file = str(path) if path else None
         if not manual:
             self.bus.publish(ev.MEDIA_BLACK, self.serial, black=True, cause=cause, diagnostics=summary,

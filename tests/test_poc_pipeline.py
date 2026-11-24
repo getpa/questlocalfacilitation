@@ -208,7 +208,7 @@ class WebAppTests(unittest.TestCase):
             self.assertEqual(start.status_code, 200, start.text)
             self.assertEqual(client.post("/api/recording/start").status_code, 409)
             import time
-            time.sleep(1.0)
+            time.sleep(1.5)   # Windows timers are coarser; 1 s gave exactly 10 packets there
             stop = client.post("/api/recording/stop").json()
             self.assertIsNone(stop["error"])
             self.assertGreater(stop["video_packets"], 10)

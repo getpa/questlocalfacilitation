@@ -190,12 +190,13 @@ svg .sub { fill: var(--muted); font-size: 12px; }
 <h2 id="requirements">2. 動作環境</h2>
 <div class="table-wrap"><table>
   <tr><th>項目</th><th>要件</th></tr>
-  <tr><td>Mac</td><td>macOS 13（Ventura）以降。Apple Silicon・Intel のどちらでも動作します。50台を扱う場合は、Mac を有線 LAN でつなぐことを推奨します。</td></tr>
-  <tr><td>ブラウザ（管理画面）</td><td>Google Chrome を推奨します。Chrome がない場合は既定のブラウザで開きます（WebCodecs 対応が必要です）。</td></tr>
-  <tr><td>Quest</td><td>Meta Quest 3。開発者モードを有効にし、初回だけ USB ケーブルで Mac に接続します。</td></tr>
+  <tr><td>PC</td><td><strong>Mac</strong>：macOS 13（Ventura）以降。Apple Silicon・Intel のどちらでも動作します。<br><strong>Windows</strong>：Windows 10（1809 以降）または Windows 11 の 64 ビット版。<br>50台を扱う場合は、PC を有線 LAN でつなぐことを推奨します。</td></tr>
+  <tr><td>ブラウザ（管理画面）</td><td>Google Chrome を推奨します。Windows で Chrome がない場合は Microsoft Edge で開きます。どちらもない場合は既定のブラウザで開きます（WebCodecs 対応が必要です）。</td></tr>
+  <tr><td>Quest</td><td>Meta Quest 3。開発者モードを有効にし、初回だけ USB ケーブルで PC に接続します。Windows では追加のドライバーは通常不要です（接続が認識されない場合は 15章）。</td></tr>
   <tr><td>ネットワーク</td><td>Quest と Mac が同じ LAN にあり、互いに通信できること（端末どうしの通信を遮断するゲスト隔離が無効であること）。Wi-Fi 6 / 6E・5GHz 以上を推奨します。</td></tr>
   <tr><td>閲覧用の端末</td><td>Chrome・Edge（PC・Android）、Safari（Mac・iPad / iPhone、iPadOS 16.4 以降）。最初に1回、証明書の導入が必要です。</td></tr>
-  <tr><td>その他</td><td>Homebrew・conda・Xcode Command Line Tools は不要です。インストーラーがリポジトリ内に必要なものを用意します。</td></tr>
+  <tr><td>その他</td><td>Homebrew・conda・Python・Xcode Command Line Tools は不要です。Windows でも管理者権限・Python・Git のインストールは不要です。インストーラーがフォルダ内に必要なものを用意します。</td></tr>
+  <tr><td>旧版 CLI</td><td><code>legacy/</code> のスクリプト（scrcpy ウィンドウ方式）は macOS 専用です。Windows では GUI（Quest Hub）を使ってください。</td></tr>
 </table></div>
 
 <!-- 3 -->
@@ -224,25 +225,46 @@ svg .sub { fill: var(--muted); font-size: 12px; }
   <tr><td><code>--uninstall --purge-data --yes</code></td><td>上に加えて、台帳・設定・証明書（<code>~/.questhub</code>）も削除します。</td></tr>
 </table></div>
 
+<h3>3.1 Windows でのインストール</h3>
+<p>フォルダ（例：<code>C:\questhub</code>）に展開またはクローンし、<code>install.cmd</code> をダブルクリックします。コマンドプロンプトや PowerShell から実行することもできます。管理者権限は不要で、PATH やレジストリも変更しません。</p>
+<pre><code>install.cmd              :: 初回インストール。更新後の再実行も可
+install.cmd -Doctor      :: 環境チェックだけを行う</code></pre>
+<p>チェックサムを検証した micromamba を <code>.tools\</code> に置き、Python 環境と公式の scrcpy 5.0.1 Windows 版（adb を同梱）を <code>.mamba-env\</code> に入れます。最後に環境チェックを行います。</p>
+<div class="table-wrap"><table>
+  <tr><th>オプション</th><th>用途</th></tr>
+  <tr><td><code>-Doctor</code></td><td>環境チェックだけを行います（Python と必要なモジュール、adb、scrcpy-server、Chrome / Edge、ポート）。</td></tr>
+  <tr><td><code>-Strict</code></td><td>lock ファイル（<code>locks\conda-win-64.txt</code>）だけでインストールします。</td></tr>
+  <tr><td><code>-Uninstall -Yes</code></td><td><code>.tools\</code> と <code>.mamba-env\</code> を削除します。</td></tr>
+  <tr><td><code>-Uninstall -PurgeData -Yes</code></td><td>上に加えて、台帳・設定・証明書（<code>%USERPROFILE%\.questhub</code>）も削除します。</td></tr>
+</table></div>
+<div class="note"><p><strong>Windows の注意点</strong></p>
+<ul>
+  <li>フォルダのパスは短く、日本語や空白を含まない場所（例：<code>C:\questhub</code>）を推奨します。パスが長いとインストールに失敗することがあります。</li>
+  <li>初めて起動したとき「Windows セキュリティの重要な警告」（ファイアウォール）が表示されたら、<strong>プライベート ネットワーク</strong>での通信を許可してください。許可しないと、ビューワーや Wi-Fi 経由の接続が使えません。</li>
+  <li>SmartScreen が <code>install.cmd</code> の実行を確認する場合は、「詳細情報」から実行してください。</li>
+</ul></div>
+
 <div class="warn"><p><strong>macOS 15 以降の「ローカルネットワーク」許可</strong>：初めて Quest に接続するとき、ターミナルアプリに対してローカルネットワークへのアクセス許可が求められます。許可しないと接続が <code>No route to host</code> で失敗します。拒否してしまった場合は、システム設定 ＞ プライバシーとセキュリティ ＞ ローカルネットワーク で許可してください。</p></div>
 
 <!-- 4 -->
 <h2 id="launch">4. 起動と停止</h2>
 <h3>起動</h3>
-<p>Finder で <code>questhub.command</code> をダブルクリックするか、ターミナルで次を実行します。</p>
+<p><strong>Mac</strong>：Finder で <code>questhub.command</code> をダブルクリックするか、ターミナルで次を実行します。</p>
 <pre><code>./questhub.command</code></pre>
-<p>Chrome のアプリウィンドウで管理画面（<code>http://127.0.0.1:8765/</code>）が開きます。ウィンドウを閉じてしまった場合は、Chrome でこの URL を開いてください。</p>
+<p><strong>Windows</strong>：エクスプローラーで <code>questhub.cmd</code> をダブルクリックするか、コマンドプロンプトで次を実行します。</p>
+<pre><code>questhub.cmd</code></pre>
+<p>Chrome（Windows で Chrome がなければ Edge）のアプリウィンドウで管理画面（<code>http://127.0.0.1:8765/</code>）が開きます。ウィンドウを閉じてしまった場合は、ブラウザでこの URL を開いてください。</p>
 <div class="table-wrap"><table>
   <tr><th>起動オプション</th><th>内容</th></tr>
   <tr><td><code>--port 番号</code></td><td>管理画面のポートを変更します（既定 8765）。</td></tr>
   <tr><td><code>--no-browser</code></td><td>管理画面のウィンドウを自動で開きません。</td></tr>
-  <tr><td><code>--data-dir パス</code></td><td>データの保存先を変更します（既定 <code>~/.questhub</code>）。</td></tr>
+  <tr><td><code>--data-dir パス</code></td><td>データの保存先を変更します（既定 <code>~/.questhub</code>。Windows では <code>%USERPROFILE%\.questhub</code>）。</td></tr>
   <tr><td><code>-v</code></td><td>詳しいログを表示します。</td></tr>
 </table></div>
 <p>すでに起動している場合は、2つ目は起動せず、既存の管理画面を開きます。</p>
 
 <h3>停止</h3>
-<p>起動したターミナルで <kbd>Ctrl</kbd>+<kbd>C</kbd> を押します。録画中のファイルは正しく閉じられます。授業の後は、先に管理画面の <span class="ui">授業を終了</span> を使うことを推奨します（<a href="#checklist">14章</a>）。</p>
+<p>起動したターミナル（Windows ではコマンドプロンプトのウィンドウ）で <kbd>Ctrl</kbd>+<kbd>C</kbd> を押します。録画中のファイルは正しく閉じられます。Windows でウィンドウを閉じるボタンで終了すると、録画が正しく閉じられない場合があります。授業の後は、先に管理画面の <span class="ui">授業を終了</span> を使うことを推奨します（<a href="#checklist">14章</a>）。</p>
 
 <!-- 5 -->
 <h2 id="setup">5. 初回準備</h2>
@@ -592,6 +614,9 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
   <tr><td><span class="chip bad">オフライン</span></td><td>Quest の電源・スリープ、Wi-Fi 接続、IP の変化を確認します。Quest の Wi-Fi を一度切って入れ直すと戻ることがよくあります。IP が変わった場合は台帳の IP を直すか、スキャンします。</td></tr>
   <tr><td><span class="chip bad">USB で再有効化が必要</span></td><td>Quest の再起動などで Wi-Fi ADB が無効になりました。USB でつないで Wi-Fi 化し直します。</td></tr>
   <tr><td>接続が <code>No route to host</code> で失敗する（macOS 15 以降）</td><td>ターミナルの「ローカルネットワーク」許可を確認します（<a href="#install">3章</a>）。ゲスト隔離のある Wi-Fi も原因になります。</td></tr>
+  <tr><td>Windows で USB 接続の端末が表示されない</td><td>ヘッドセット内で「USB デバッグを許可」の確認が出ていないか見ます。ケーブル（データ通信対応）とポートを替えて試します。それでも認識されない場合は、Meta の「Oculus ADB Drivers」をインストールします。</td></tr>
+  <tr><td>Windows でビューワーや Wi-Fi 接続がつながらない</td><td>Windows ファイアウォールで <code>python.exe</code> と <code>adb.exe</code> がプライベート ネットワークで許可されているか確認します。ネットワークのプロファイルが「パブリック」になっている場合は「プライベート」に変えます。</td></tr>
+  <tr><td>Windows でインストールに失敗する</td><td>フォルダのパスを短く（例：<code>C:\questhub</code>）して再実行します。社内プロキシ経由の場合は、Windows のプロキシ設定を確認します。<code>install.cmd -Doctor</code> の結果も確認します。</td></tr>
   <tr><td>スキャンで見つからない</td><td>Wi-Fi 化が済んでいるか、Mac と同じサブネットか確認します。範囲を指定して再スキャンします。</td></tr>
   <tr><td>映像が真っ黒</td><td><a href="#black">13章</a>を参照します。通知の推定原因を確認し、検出されない場合は <span class="ui">黒画面の診断</span> を押します。</td></tr>
   <tr><td>映像が乱れる・止まる</td><td>拡大表示で <span class="ui">キーフレーム要求</span>。続く場合は品質を下げ、電波強度とアクセスポイントの偏りを確認します。</td></tr>

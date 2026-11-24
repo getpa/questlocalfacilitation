@@ -9,6 +9,9 @@ import tempfile
 import time
 import unittest
 
+if sys.platform == "win32":
+    raise unittest.SkipTest("bash scripts (macOS installer / legacy CLI) are not used on Windows")
+
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / 'legacy/quest_multi_scrcpy.sh'
 

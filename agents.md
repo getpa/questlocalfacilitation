@@ -1,7 +1,7 @@
 # agents.md — ローカルWi-Fi上の **複数台 Meta Quest 3** を **scrcpy** で一括操作・同時モニタリングする運用ガイド
 
 > 目的：研究室・授業などで **最大50台の Quest 3** を **ワイヤレス ADB + scrcpy** で同時モニタリングし、必要に応じて入力補助や録画を行うための実践手順とスクリプト集。  
-> 想定OS：**macOS（Apple Silicon / Intel）**。Windows / Linux 向けの記述は省略。  
+> 想定OS：**macOS（Apple Silicon / Intel）**。GUI 版（Quest Hub）は **Windows 10/11** でも動作します（`install.cmd` → `questhub.cmd`、README の「Windows」）。本稿の CLI（bash スクリプト）は macOS 専用です。  
 > 注意：scrcpy は **1インスタンス=1台** 表示が基本です。**完全な入力同期ブロードキャスト機能はありません**（`adb shell input` で最低限の一括操作を補助）。
 
 ---

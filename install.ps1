@@ -337,3 +337,4 @@ Initialize-AppData
 Invoke-Doctor
 Log 'Done.'
 Log '  GUI: double-click questhub.cmd (or run .\questhub.cmd)'
+exit 0   # do not leak the exit code of the last external command (adb, python)

@@ -13,6 +13,7 @@
   - v0.11: 装着中の再現で原因を特定（Strata レイヤーの flags 0x80）。パススルーを原因から外し、Meta の録画停止中は復旧を待機（§4.10）
   - v0.12: Wi-Fi の接続先を adb で一括設定する機能を調査・試作。運用に耐えないため削除し、調査結果だけを残す（§4.9.1）
   - v0.13: Wi-Fi 設定のダイアログ表示中も Meta が録画を止めることを確認（§4.10）
+  - v0.14: Windows 対応（GUI のみ。インストーラー `install.ps1`、起動 `questhub.cmd`、§9.8）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -698,6 +699,33 @@ questhub.command               # 起動用ラッパー（.mamba-env/bin/python -
 - 実行用（`environment.yml`）: `python=3.11`, `av`（PyAV）, `fastapi`, `uvicorn`, `cryptography`（CA/証明書）, `qrcode`, `requests`, `jq`, `coreutils`, `curl`, `unzip`
 - ビルド用（`environment-build.yml`）: `git`, `meson`, `ninja`, `pkg-config`, `sdl3`, `ffmpeg`, `libusb`, `openjdk=17`
 - フロントエンドはビルド不要の ES Modules で、Node は不要です。
+- Windows 用（`environment-windows.yml`）: 実行用と同じ Python パッケージ。`jq`・`coreutils`・`curl`・`unzip` は PowerShell が代わりを務めるので入れない。
+
+### 9.8 Windows 対応（2026-11-24）
+
+**範囲**: Quest Hub GUI を Windows 10（1809 以降）/ 11 の x64 で動かす。旧版 CLI（`legacy/` の bash スクリプト、scrcpy ウィンドウ方式）は macOS 専用のまま。
+
+**インストーラー（`install.ps1`、`install.cmd` から起動）**
+- Windows に標準で入っている **Windows PowerShell 5.1** で動く（PowerShell 7・Python・Git・管理者権限は不要）。`install.cmd` は `-ExecutionPolicy Bypass` で `install.ps1` を呼ぶだけ。ダブルクリック時は最後に `pause` する。
+- 処理は macOS 版と同じ順序: 前提確認（64 ビット・ビルド 17763 以上・空き容量・パスの長さ）→ micromamba（`micromamba-win-64` 2.10.0-0、SHA-256 固定）→ 環境（`locks/conda-win-64.txt`、無ければ `environment-windows.yml` を解決）→ scrcpy → データフォルダ → doctor。
+- **adb は scrcpy の公式 Windows 版（`scrcpy-win64-v5.0.1.zip`、SHA-256 固定）に同梱のものを使う。** scrcpy と adb の版が合っており、platform-tools を別にダウンロードしなくてよい。`scrcpy-server` は macOS 版と同じハッシュ（5.0.1）で検証する。
+- 置き場所: `.tools\bin\micromamba.exe`、`.mamba-env\python.exe`、`.mamba-env\vendor\scrcpy\{adb.exe,scrcpy.exe,scrcpy-server}`。PATH やレジストリは変更しない。
+- 再実行は冪等（lock のハッシュと scrcpy の版・ハッシュで判定）。環境を作り直すときも `vendor\` は残す。
+- オプション: `-Doctor`、`-Strict`（lock 必須）、`-Uninstall [-PurgeData] -Yes`。アンインストール時は adb サーバーを止めてから消す（`adb.exe` がロックされるため）。
+- lock は macOS で `./install.sh --relock win-64` で作る（micromamba の dry-run は別プラットフォームも解決できる）。
+
+**起動（`questhub.cmd`）**: `.mamba-env\python.exe -m questhub` を実行する。異常終了したときはウィンドウを閉じずに止まる。
+
+**アプリ側の変更**
+- `paths.binary()`: Windows では `vendor\scrcpy` → `vendor\platform-tools` → `Library\bin` → `Scripts` の順に `*.exe` を探す。
+- ブラウザ: Chrome、無ければ Edge（Windows 10/11 に標準）を `--app=URL` で開く。どちらも無ければ既定のブラウザ。
+- 終了: Windows のイベントループは `add_signal_handler` を持たないので、`signal.signal` で Ctrl+C（と `SIGBREAK`）を受ける。
+- 多重起動チェック: **Windows の `os.kill(pid, 0)` はプロセスを終了させてしまう**ので、`OpenProcess` と `GetExitCodeProcess`（ctypes）で生存だけを確かめる（`questhub/core/procs.py`）。
+- LAN スキャンの自分のサブネット: `ipconfig` は表示言語で項目名が変わるため、PowerShell の `Get-NetIPAddress | ConvertTo-Json` を使う。
+- 録画ファイル名: 末尾のピリオドを除く（Windows では使えない）。
+- `.gitattributes`: `.cmd`/`.ps1` は CRLF、シェルスクリプトは LF に固定（Windows で clone しても bash スクリプトが壊れない）。
+
+**検証**: CI に `windows-latest` のジョブを追加した（Windows PowerShell 5.1 で実インストール → 再実行が何もしないこと → doctor → テスト → GUI を起動して管理画面が応答し、2 つ目の起動が拒否され、1 つ目が生き残ること → アンインストール）。bash を使うテストは Windows では飛ばす。実機の Quest を Windows につないだ確認はまだしていない。
 
 ## 10. 未決事項
 

@@ -1,14 +1,15 @@
 # Quest Local Facilitation
 
-Toolkit for mirroring up to 50 Meta Quest 3 headsets over local Wi-Fi using scrcpy and adb from a macOS host.
+Toolkit for mirroring up to 50 Meta Quest 3 headsets over local Wi-Fi using scrcpy and adb from a macOS or Windows host. The Quest Hub GUI runs on both; the legacy CLI (`legacy/`) is macOS only.
 
 ## Repository layout
 
 | Path | Contents |
 |------|----------|
-| `questhub/`, `questhub.command` | Quest Hub GUI (browser-based; see “Quest Hub GUI” below and `docs/user_manual.html`) |
+| `questhub/`, `questhub.command`, `questhub.cmd` | Quest Hub GUI (browser-based; see “Quest Hub GUI” below and `docs/user_manual.html`) |
 | `legacy/` | Legacy CLI: one scrcpy window per headset (`quest_multi_scrcpy.sh` and helpers, device lists) |
-| `install.sh`, `scripts/bootstrap_binaries.sh`, `environment*.yml`, `locks/` | Installer shared by both |
+| `install.sh`, `scripts/bootstrap_binaries.sh`, `environment.yml`, `locks/conda-osx-*.txt` | macOS installer (GUI and legacy CLI) |
+| `install.ps1`, `install.cmd`, `environment-windows.yml`, `locks/conda-win-64.txt` | Windows installer (GUI) |
 | `tests/`, `tools/`, `docs/` | Tests, load-test tool, design document and user manual |
 
 Do not use the GUI and the legacy CLI on the same headsets at the same time.
@@ -22,7 +23,21 @@ Nothing else is required: no Mambaforge/conda, Homebrew, or Xcode Command Line T
 
 > The bootstrap installs the official `scrcpy` **v5.0.1** client and its matching bundled server, checked against the published SHA-256 checksums. Building scrcpy from source is optional (`./install.sh --build-from-source`, which adds `environment-build.yml` and needs Xcode Command Line Tools); custom repositories/refs can be selected with `SCRCPY_GIT_REPO` / `SCRCPY_GIT_REF`.
 
-## Set Up the Environment
+## Windows
+
+Windows 10 (1809+) or 11, 64-bit. Nothing else is required: no administrator rights, Python, conda or Git. Unzip or clone to a short path such as `C:\questhub`, then double-click `install.cmd` (it runs `install.ps1` with Windows PowerShell 5.1):
+
+```bat
+install.cmd                      :: install or update (idempotent)
+install.cmd -Doctor              :: check python / adb / scrcpy-server / Chrome or Edge / ports
+install.cmd -Strict              :: install only from locks\conda-win-64.txt
+install.cmd -Uninstall -Yes      :: remove .tools\ and .mamba-env\ (add -PurgeData for %USERPROFILE%\.questhub)
+questhub.cmd                     :: start the GUI (double-clickable)
+```
+
+The installer puts a pinned, checksum-verified micromamba in `.tools\`, the Python environment in `.mamba-env\`, and the official scrcpy 5.0.1 Windows build, which bundles a matching `adb.exe`, in `.mamba-env\vendor\scrcpy\`. When Windows Firewall asks on the first start, allow `python.exe` on private networks; the viewer and adb over Wi-Fi need it. The lock file is generated on a Mac with `./install.sh --relock win-64`. The legacy bash CLI is not supported on Windows.
+
+## Set Up the Environment (macOS)
 
 ```bash
 ./install.sh            # first install, or update after pulling changes (idempotent)
@@ -33,7 +48,7 @@ Nothing else is required: no Mambaforge/conda, Homebrew, or Xcode Command Line T
 |--------|---------|
 | `--strict` | Install only from `locks/conda-<platform>.txt` and a pinned platform-tools archive (identical classroom Macs) |
 | `--build-from-source` | Also install build tools and compile scrcpy from git |
-| `--relock [osx-arm64\|osx-64]` | Re-solve `environment.yml` and rewrite the lock file (maintainers) |
+| `--relock [osx-arm64\|osx-64\|win-64]` | Re-solve `environment.yml` (`environment-windows.yml` for win-64) and rewrite the lock file (maintainers) |
 | `--uninstall [--purge-data] --yes` | Remove `.tools/` and `.mamba-env/` (and `~/.questhub` with `--purge-data`) |
 
 On macOS 15 or later, the first `adb connect` to a headset triggers the "Local Network" permission prompt for your terminal app. If it was denied, `adb connect` fails with `No route to host`; allow it in System Settings > Privacy & Security > Local Network.

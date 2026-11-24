@@ -39,7 +39,7 @@ def create_viewer_app(app: Application, secure: bool = True) -> FastAPI:
     @api.get("/", response_class=HTMLResponse)
     async def index(request: Request):
         page = "index.html" if session_of(request) else "login.html"
-        return (STATIC / "viewer" / page).read_text()
+        return (STATIC / "viewer" / page).read_text(encoding="utf-8")
 
     @api.post("/login")
     async def login(request: Request, body: dict = Body(...)):
@@ -99,7 +99,7 @@ def create_ca_app(app: Application) -> FastAPI:
     @api.get("/", response_class=HTMLResponse)
     async def page():
         viewer_url = app.viewer_urls()[0]
-        template = (STATIC / "viewer" / "ca.html").read_text()
+        template = (STATIC / "viewer" / "ca.html").read_text(encoding="utf-8")
         return (template
                 .replace("{{VIEWER_URL}}", html.escape(viewer_url))
                 .replace("{{FINGERPRINT}}", html.escape(app.ca.fingerprint()))

@@ -41,8 +41,8 @@ class PortableHelpersTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             scrcpy = Path(tmp) / "vendor/scrcpy"
             scrcpy.mkdir(parents=True)
-            (scrcpy / "adb.exe").write_text("")
-            (scrcpy / "scrcpy-server").write_text("")
+            (scrcpy / "adb.exe").write_text("", encoding="utf-8")
+            (scrcpy / "scrcpy-server").write_text("", encoding="utf-8")
             with mock.patch.dict(os.environ, {"QH_ENV_DIR": tmp}), mock.patch.object(sys, "platform", "win32"):
                 try:
                     win = importlib.reload(paths)
@@ -55,19 +55,19 @@ class PortableHelpersTests(unittest.TestCase):
 
 class WindowsInstallerFilesTests(unittest.TestCase):
     def test_lock_and_spec(self):
-        lock = (ROOT / "locks/conda-win-64.txt").read_text()
+        lock = (ROOT / "locks/conda-win-64.txt").read_text(encoding="utf-8")
         self.assertIn("@EXPLICIT", lock)
         urls = [l for l in lock.splitlines() if l.startswith("https://")]
         self.assertTrue(urls and all(re.search(r"/(win-64|noarch)/.+#[0-9a-f]{32}$", u) for u in urls))
         for pkg in ("python-3.11", "/av-", "/fastapi-", "/uvicorn-", "/cryptography-", "/numpy-", "/qrcode-"):
             self.assertIn(pkg, lock)
-        spec = (ROOT / "environment-windows.yml").read_text()
+        spec = (ROOT / "environment-windows.yml").read_text(encoding="utf-8")
         deps = [l.strip() for l in spec.splitlines() if l.strip().startswith("- ")]
         self.assertNotIn("- coreutils", deps, "Unix helper tools are not needed on Windows")
 
     def test_installer_pins_match_the_mac_bootstrap(self):
-        ps1 = (ROOT / "install.ps1").read_text()
-        bootstrap = (ROOT / "scripts/bootstrap_binaries.sh").read_text()
+        ps1 = (ROOT / "install.ps1").read_text(encoding="utf-8")
+        bootstrap = (ROOT / "scripts/bootstrap_binaries.sh").read_text(encoding="utf-8")
         server_sha = re.search(r"\$ScrcpyServerSha256 = '([0-9a-f]{64})'", ps1).group(1)
         self.assertIn(server_sha, bootstrap, "same scrcpy-server 5.0.1 on macOS and Windows")
         self.assertRegex(ps1, r"\$MicromambaSha256 = '[0-9a-f]{64}'")
@@ -76,12 +76,12 @@ class WindowsInstallerFilesTests(unittest.TestCase):
             self.assertIn(switch, ps1)
 
     def test_launchers_and_line_endings(self):
-        attrs = (ROOT / ".gitattributes").read_text()
+        attrs = (ROOT / ".gitattributes").read_text(encoding="utf-8")
         for rule in ("*.cmd text eol=crlf", "*.ps1 text eol=crlf", "*.sh text eol=lf"):
             self.assertIn(rule, attrs)
-        launcher = (ROOT / "questhub.cmd").read_text()
+        launcher = (ROOT / "questhub.cmd").read_text(encoding="utf-8")
         self.assertIn(r'"%ENV_DIR%\python.exe" -m questhub %*', launcher)
-        self.assertIn("install.ps1", (ROOT / "install.cmd").read_text())
+        self.assertIn("install.ps1", (ROOT / "install.cmd").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

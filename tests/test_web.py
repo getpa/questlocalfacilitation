@@ -33,7 +33,8 @@ class TlsTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         ca = LocalCA(Path(tmp.name) / "tls")
         cert_path, key_path = ca.ensure_server_cert(["lab-mac.local", "localhost"], ["127.0.0.1", "192.168.1.10"])
-        self.assertEqual(oct(os.stat(ca.ca_key_path).st_mode & 0o777), "0o600")
+        if sys.platform != "win32":   # POSIX modes; on Windows the key is protected by the profile ACL
+            self.assertEqual(oct(os.stat(ca.ca_key_path).st_mode & 0o777), "0o600")
         cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
         self.assertEqual(ca._san(cert), {"DNS:lab-mac.local", "DNS:localhost", "IP:127.0.0.1", "IP:192.168.1.10"})
         self.assertLessEqual((cert.not_valid_after_utc - cert.not_valid_before_utc).days, 398)
@@ -185,7 +186,7 @@ class FrontendSyntaxTests(unittest.TestCase):
             src = "\n".join("" if line.startswith("import ") else
                             line.replace("export class", "class").replace("export function", "function")
                             .replace("export const", "const").replace("export async function", "async function")
-                            for line in path.read_text().splitlines())
+                            for line in path.read_text(encoding="utf-8").splitlines())
             with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
                 f.write(src)
             try:

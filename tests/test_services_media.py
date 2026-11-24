@@ -268,7 +268,7 @@ class RecordingServiceTests(unittest.TestCase):
             with av.open(entry["parts"][0]) as c:
                 self.assertEqual(sorted(s.type for s in c.streams), ["audio", "video"])
         self.assertIn("Seat_01_A_", Path(stopped["S1"]["parts"][0]).name)
-        data = json.loads((Path(sessions[0]["dir"]) / "session.json").read_text())
+        data = json.loads((Path(sessions[0]["dir"]) / "session.json").read_text(encoding="utf-8"))
         self.assertEqual(sorted(data["devices"]), ["S1", "S2"])
         self.assertIsNotNone(data["stopped_at"])
 

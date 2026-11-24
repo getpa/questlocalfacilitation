@@ -32,7 +32,7 @@ class PresetTests(unittest.TestCase):
         self.assertEqual(StreamOptions.from_preset("standard", max_fps=30, audio=False).quality, "standard")
 
     def test_cli_uses_the_same_values(self):
-        script = (ROOT / "legacy/quest_multi_scrcpy.sh").read_text()
+        script = (ROOT / "legacy/quest_multi_scrcpy.sh").read_text(encoding="utf-8")
         units = {"K": 1_000, "M": 1_000_000}
         for name, size, fps, rate in re.findall(r"(\w+)\) size=(\d+); fps=(\d+); rate=(\d+[KM]) ;;", script):
             preset = get_preset(name)
@@ -41,7 +41,7 @@ class PresetTests(unittest.TestCase):
 
     def test_docs_contain_the_bandwidth_table(self):
         for doc in ("README.md", "docs/GUI_DESIGN.md"):
-            self.assertIn(bandwidth_table(), (ROOT / doc).read_text(), doc)
+            self.assertIn(bandwidth_table(), (ROOT / doc).read_text(encoding="utf-8"), doc)
 
 
 @requires_av

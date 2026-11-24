@@ -11,6 +11,8 @@ if not exist "%ENV_DIR%\python.exe" (
   exit /b 1
 )
 set "PATH=%ENV_DIR%\vendor\scrcpy;%ENV_DIR%;%ENV_DIR%\Library\bin;%ENV_DIR%\Scripts;%PATH%"
+rem UTF-8 for files and console output (Japanese text) regardless of the Windows code page.
+set "PYTHONUTF8=1"
 cd /d "%ROOT%"
 "%ENV_DIR%\python.exe" -m questhub %*
 set "RC=%ERRORLEVEL%"

@@ -43,16 +43,16 @@ class InstanceLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists():
             try:
-                pid = int(self.path.read_text().strip())
+                pid = int(self.path.read_text(encoding="utf-8").strip())
             except ValueError:
                 pid = None
             if pid and pid != os.getpid() and pid_alive(pid):
                 raise AlreadyRunning(f"Quest Hub is already running (pid {pid})")
-        self.path.write_text(str(os.getpid()))
+        self.path.write_text(str(os.getpid()), encoding="utf-8")
 
     def release(self) -> None:
         try:
-            if self.path.read_text().strip() == str(os.getpid()):
+            if self.path.read_text(encoding="utf-8").strip() == str(os.getpid()):
                 self.path.unlink()
         except OSError:
             pass

@@ -61,8 +61,12 @@ class ClockMap:
 
     def __init__(self, window: int = SYNC_WINDOW):
         self._offsets: deque[float] = deque(maxlen=window)
+        self._last_us: int | None = None
 
     def add(self, sensor_us: int, received_at: float) -> None:
+        if self._last_us is not None and sensor_us < self._last_us:
+            self._offsets.clear()   # the sensor clock restarted (headset reboot): old offsets no longer apply
+        self._last_us = sensor_us
         self._offsets.append(received_at - sensor_us / 1e6)
 
     @property
@@ -171,7 +175,11 @@ class ImuRecorder:
         clock = ClockMap()   # the sensor clock is the same across restarts
         first = True
         while True:
-            adb = self.adb_fn()
+            try:
+                adb = self.adb_fn()
+            except Exception as exc:   # the device left the registry, etc.: keep trying until stop()
+                self.stats.error = str(exc) or type(exc).__name__
+                adb = None
             if adb is None:
                 await asyncio.sleep(backoff)
                 continue
@@ -230,10 +238,12 @@ class ImuRecorder:
             await asyncio.gather(self._task, return_exceptions=True)
             self._task = None
         await self._terminate()
-        adb = self.adb_fn() if self._spawn == self._spawn_adb else None
-        if adb is not None:   # the helper notices the closed pipe only at its next write; stop it now
+        if self._spawn == self._spawn_adb:
+            # the helper notices the closed pipe only at its next write; stop it now
             try:
-                await adb.shell(f"pkill -f {MAIN_CLASS}", timeout=10, check=False)
+                adb = self.adb_fn()
+                if adb is not None:
+                    await adb.shell(f"pkill -f {MAIN_CLASS}", timeout=10, check=False)
             except Exception as exc:
                 log.debug("%s: could not stop the IMU helper: %s", self.serial, exc)
         if self._file:

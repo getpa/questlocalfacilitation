@@ -73,6 +73,31 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parser.feed("5,1,1.0,2.0", 0, stats), [])
         self.assertIn("unexpected columns", stats.error)
 
+    def test_clock_restart_drops_old_offsets(self):
+        clock = imu.ClockMap()
+        clock.add(500_000_000, 1000.0)          # sensor clock at 500 s
+        clock.add(501_000_000, 1001.0)
+        clock.add(2_000_000, 1010.0)            # the headset rebooted: its clock starts again near 0
+        self.assertAlmostEqual(clock.to_host(3_000_000), 1011.0)
+
+    def test_adb_lookup_errors_do_not_end_the_recording(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+
+        def broken():
+            raise AttributeError("no target")
+
+        async def scenario():
+            rec = imu.ImuRecorder(Path(tmp.name) / "x.imu.csv", broken)
+            rec.start()
+            await asyncio.sleep(0.05)
+            alive = not rec._task.done()
+            return alive, await rec.stop()
+
+        alive, stats = asyncio.run(scenario())
+        self.assertTrue(alive)
+        self.assertEqual(stats.error, "no target")
+
     def test_clock_window_follows_drift(self):
         clock = imu.ClockMap(window=3)
         for i, received in enumerate([10.050, 11.001, 12.002, 13.003, 14.004]):

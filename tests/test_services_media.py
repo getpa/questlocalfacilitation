@@ -301,6 +301,7 @@ class RecordingServiceTests(unittest.TestCase):
             self.assertIsNone(entry["error"])
             self.assertGreater(entry["video_packets"], 10)
             self.assertTrue(entry["mic_track"])
+            self.assertIsNone(entry["mic_error"], "the microphone was up when the recording stopped")
             self.assertGreater(entry["mic_packets"], 10)
             with av.open(entry["parts"][0]) as c:
                 self.assertEqual(sorted(s.type for s in c.streams), ["audio", "audio", "video"])

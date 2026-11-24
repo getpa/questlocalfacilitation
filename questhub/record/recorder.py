@@ -202,6 +202,13 @@ class Recorder:
                 except queue.Empty:
                     event = _TIMEOUT
                 if event is None:
+                    if container is None and pending:
+                        # stopped while waiting for the (microphone) audio config: keep what was buffered
+                        base = pending[0].packet.pts
+                        open_container()
+                        for queued in pending:
+                            write(queued)
+                        pending = []
                     break
                 kind = event.kind
                 if container is not None and (

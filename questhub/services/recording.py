@@ -181,8 +181,7 @@ class RecordingService:
                          audio_packets=stats.audio_packets, error=stats.error, reason=reason)
             entry.update(mic_track=stats.mic_track, mic_packets=stats.mic_packets)
             if mic_stats is not None:
-                entry.update(mic_restarts=mic_stats.restarts,
-                             mic_error=None if stats.mic_packets else mic_stats.error)
+                entry.update(mic_restarts=mic_stats.restarts, mic_error=mic_stats.ended_with_error)
             if imu_stats is not None:
                 entry.update(imu_rows=imu_stats.rows, imu_samples=imu_stats.samples,
                              imu_restarts=imu_stats.restarts, imu_error=imu_stats.error)
@@ -212,6 +211,7 @@ class RecordingService:
                            "video_packets": recorder.stats.video_packets, "error": recorder.stats.error,
                            "mic_packets": recorder.stats.mic_packets if serial in self.mics else None,
                            "mic_error": self.mics[serial].stats.error if serial in self.mics else None,
+                           "mic_connected": self.mics[serial].stats.connected if serial in self.mics else None,
                            "imu_rows": self.imu[serial].stats.rows if serial in self.imu else None,
                            "imu_error": self.imu[serial].stats.error if serial in self.imu else None})
         return {"session": self.session["name"] if self.session else None, "active": active,

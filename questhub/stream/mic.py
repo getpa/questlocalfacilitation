@@ -40,6 +40,7 @@ class MicStats:
     restarts: int = 0
     error: str | None = None
     connected: bool = False
+    ended_with_error: str | None = None   # set by stop(): the error, if the microphone was down at the end
 
 
 class MicCapture:
@@ -98,6 +99,7 @@ class MicCapture:
             backoff = min(MAX_BACKOFF, backoff * 2)
 
     async def stop(self) -> MicStats:
+        self.stats.ended_with_error = None if self.stats.connected else (self.stats.error or "not connected")
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)

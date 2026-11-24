@@ -382,8 +382,12 @@ $('#tsv-file').onchange = async (e) => {
 
 function micCell(r) {
   if (r.mic_packets === null || r.mic_packets === undefined) return '<span class="muted">—</span>';
-  if (r.mic_packets > 0) return '録音中';
-  return r.mic_error ? `<span class="chip warn" title="${esc(r.mic_error)}">取得できません</span>` : '<span class="muted">開始中</span>';
+  if (r.mic_connected && r.mic_packets > 0) return '録音中';
+  if (r.mic_error) {
+    const label = r.mic_packets > 0 ? '途切れています（再接続中）' : '取得できません';
+    return `<span class="chip warn" title="${esc(r.mic_error)}">${label}</span>`;
+  }
+  return '<span class="muted">開始中</span>';
 }
 
 function imuCell(r) {

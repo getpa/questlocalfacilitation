@@ -59,6 +59,7 @@ class MicOptionsTests(unittest.TestCase):
         stats = asyncio.run(scenario())
         self.assertGreaterEqual(len(attempts), 3)
         self.assertEqual(stats.error, "device offline")
+        self.assertEqual(stats.ended_with_error, "device offline", "down at the end: reported in session.json")
 
 
 _real_sleep = asyncio.sleep
@@ -75,7 +76,7 @@ class RecorderMicTrackTests(unittest.TestCase):
         cls.video = make_h264(frames=60, gop=15)
         cls.audio = make_opus(packets=100)
 
-    def _record(self, mic_delay: float | None, mic_wait: float = 6.0):
+    def _record(self, mic_delay: float | None, mic_wait: float = 6.0, frames_limit: int | None = None):
         import av
         from questhub.record import recorder as recmod
         from questhub.stream.hub import FrameHub
@@ -97,7 +98,7 @@ class RecorderMicTrackTests(unittest.TestCase):
                 loop = asyncio.get_running_loop()
                 start = loop.time()
                 mic_started = False
-                for i, (pts, key, data) in enumerate(frames):
+                for i, (pts, key, data) in enumerate(frames[:frames_limit]):
                     if mic_delay is not None and not mic_started and loop.time() - start >= mic_delay:
                         mic.publish_audio(MediaPacket(head, None, config=True))
                         mic_started = True
@@ -122,6 +123,13 @@ class RecorderMicTrackTests(unittest.TestCase):
         self.assertGreater(stats.mic_packets, 10)
         self.assertEqual(kinds, [("video", None), ("audio", "Headset audio"), ("audio", "Microphone")])
         self.assertGreater(stats.video_packets, 30, "video waiting for the microphone is kept, not dropped")
+
+    def test_stop_while_waiting_for_the_microphone_keeps_the_video(self):
+        stats, kinds = self._record(mic_delay=None, mic_wait=60.0, frames_limit=30)   # stop after ~1 s
+        self.assertIsNone(stats.error)
+        self.assertFalse(stats.mic_track)
+        self.assertEqual([k for k, _ in kinds], ["video", "audio"])
+        self.assertGreaterEqual(stats.video_packets, 25, "buffered video is written, not discarded")
 
     def test_missing_microphone_does_not_block_the_recording(self):
         stats, kinds = self._record(mic_delay=None, mic_wait=0.5)

@@ -16,6 +16,7 @@
   - v0.14: Windows 対応（GUI のみ。インストーラー `install.ps1`、起動 `questhub.cmd`、§9.8）
   - v0.15: Windows 11 ではスマート アプリ コントロールをオフにする必要があることを追記（§9.8）
   - v0.16: ヘッドセットの IMU を録画と一緒に記録（§4.11）
+  - v0.17: ヘッドセットのマイクを録画の別トラックとして記録（§4.12）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -517,6 +518,19 @@ v0.2 では1つの状態機械に接続・映像・録画を入れていまし�
 **録画との連携**: 設定 `record_imu`（既定 true）と `imu_rate_hz`（既定 100、1〜800）。録画を開始すると、映像と同じ名前の `.imu.csv` を作って記録し、録画の停止で止める。`session.json` には `imu_file`・`imu_rate_hz`・`imu_rows`・`imu_samples`・`imu_restarts`・`imu_error` を書く。「録画中」の表に IMU の行数を出す。
 
 **検証**: 実機（USB / Wi-Fi）で 5 秒の記録 → 100Hz で欠落なし、停止後に端末側のプロセスが残らないことを確認。GUI の API で録画を開始・停止し、MKV と `.imu.csv`（8 秒で 741 行）が同じフォルダにでき、`session.json` に記録されることを確認した。装着して動かしたときの値の妥当性（軸の向きなど）は未確認（静止時の加速度の大きさ ≈ 9.8 m/s² と角速度 ≈ 0 は確認）。IMU とヘッドセットの軸の関係は、センサー名の JSON の `DeviceFromImu`（約 20° 傾いた回転）に出ている。
+
+### 4.12 ヘッドセットのマイク（2026-11-25）
+
+**調査（Quest 3、scrcpy 5.0.1）**: scrcpy の `audio_source=mic`（ほかに `mic-unprocessed`・`mic-camcorder`・`mic-voice-recognition`・`mic-voice-communication`）でマイクを取得できる。録音中の `dumpsys audio` で、`source client=MIC`・`uid:2000`（shell）・**`silenced:false`** を確認した（実際の入力デバイスから 48kHz で取得している。センサー プライバシーのマイク無効も OFF）。表示用のセッション（映像＋`playback`）と**同時に動かしても両方とも取得できる**。scrcpy は 1 セッション 1 音源なので、ヘッドセットの音とマイクを同時に取るには 2 つ目のセッションが要る。
+
+**方式**
+- 録画中の端末だけ、2 つ目の scrcpy セッション（`video=false`・`control=false`・`audio_source=mic`）を `stream/mic.py` の `MicCapture` が動かす。表示用セッションの状態を変えないよう `stay_awake`・`power_on`・`cleanup` は false にする（cleanup が「元の設定」を後から戻して、表示用セッションの設定を打ち消すのを防ぐ）。
+- パケットは専用の FrameHub に流し、`Recorder` が 3 本目のトラック（Opus、タイトル「Microphone」）として書く。ヘッドセットの音のトラックはタイトル「Headset audio」。
+- **時計**: scrcpy は映像も音声もヘッドセットの単調時計（µs）で PTS を付けるので、別セッションのマイクも映像と同じ基準で並ぶ。実機で、マイクの最初のパケットが映像の開始から 0.8 秒後（接続にかかる時間）に置かれることを確認した。
+- Matroska はヘッダーを書いた後にトラックを足せないため、最初のキーフレームから最大 `MIC_WAIT_S`（6 秒）マイクの設定を待つ。その間の映像・音声は保持し、捨てない。来なければマイクなしで書き始める（録画は止めない）。分割（`_partNN`）でもマイクのトラックを引き継ぐ。
+- 切断時は `MicCapture` が間隔を延ばしながら再接続する（その間は無音）。設定 `record_mic`（既定 true）と `mic_source`（既定 `mic`）。`session.json` に `mic_track`・`mic_packets`・`mic_restarts`・`mic_error`。
+
+**検証**: 偽のマイクセッションで、遅れて届くマイクが 3 本目のトラックになること、届かないときもマイクなしで録画が続くことをテストした。実機の GUI 録画で MKV が「映像・Headset audio・Microphone」の 3 トラックになることを確認した。Mac のスピーカーで読み上げた音声（ヘッドセットから離れた位置）を GUI の録画で記録し、読み上げている約 4 秒間だけ「Microphone」トラックの音量が上がる（RMS 最大 0.0006 ≈ −64dBFS、前後は無音レベル）こと、「Headset audio」トラックには入らないことを確認した。装着して話した声の音量・音質は未確認。
 
 ## 5. API（案）
 

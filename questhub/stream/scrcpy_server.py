@@ -41,6 +41,8 @@ class StreamOptions:
     audio: bool = True
     audio_dup: bool = True
     control: bool = True
+    video: bool = True
+    audio_source: str | None = None   # None: headset output (playback/output); e.g. "mic" for the microphone
     extra: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -59,7 +61,7 @@ class StreamOptions:
             "scid": f"{scid:08x}",
             "log_level": "info",
             "tunnel_forward": "true",
-            "video": "true",
+            "video": str(self.video).lower(),
             "audio": str(self.audio).lower(),
             "control": str(self.control).lower(),
             "cleanup": "true",
@@ -75,7 +77,9 @@ class StreamOptions:
         args["video_codec_options"] = (
             f"i-frame-interval={int(interval)}" if float(interval).is_integer()
             else f"i-frame-interval:float={interval}")
-        if self.audio:
+        if self.audio and self.audio_source:
+            args["audio_source"] = self.audio_source
+        elif self.audio:
             args["audio_source"] = "playback" if self.audio_dup else "output"
             if self.audio_dup:
                 args["audio_dup"] = "true"
@@ -238,7 +242,8 @@ class ScrcpyServer:
                             SERVER_VERSION, *self.options.server_args(self.scid)])
         self._process = await self.adb.spawn("shell", command)
         self._log_task = asyncio.create_task(self._collect_log())
-        self.connection = ScrcpyConnection(video=True, audio=self.options.audio, control=self.options.control)
+        self.connection = ScrcpyConnection(video=self.options.video, audio=self.options.audio,
+                                           control=self.options.control)
         try:
             await self.connection.open("127.0.0.1", self.port, timeout=timeout)
         except BaseException:

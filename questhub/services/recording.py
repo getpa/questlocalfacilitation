@@ -1,6 +1,7 @@
 """Use case: recording sessions (docs/GUI_DESIGN.md §4.7).
 
-recordings/<session>/<alias>_<YYYYmmdd-HHMMSS>[_partNN].mkv (+ .imu.csv, the headset IMU) plus session.json.
+recordings/<session>/<alias>_<YYYYmmdd-HHMMSS>[_partNN].mkv (video, headset audio and, as a third track,
+the headset microphone; + .imu.csv, the headset IMU) plus session.json.
 Quality changes are locked while a headset is being recorded. Free disk space
 is watched; below the threshold every recording stops.
 """
@@ -21,6 +22,7 @@ from questhub.devices.registry import Registry
 from questhub.imu.recorder import ImuRecorder
 from questhub.record.recorder import Recorder
 from questhub.services.streaming import StreamingService
+from questhub.stream.mic import MIC_SOURCES, MicCapture
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +43,7 @@ class RecordingService:
         self.bus = streaming.bus
         self.active: dict[str, Recorder] = {}
         self.imu: dict[str, ImuRecorder] = {}
+        self.mics: dict[str, MicCapture] = {}
         self.session: dict | None = None
         self._task: asyncio.Task | None = None
         self._disk_warned = False
@@ -106,7 +109,12 @@ class RecordingService:
             row = self.registry.get(serial) or {}
             alias = safe_name(row.get("alias") or serial)
             path = self._unique_path(f"{alias}_{safe_name(serial)[-6:]}_{datetime.now():%Y%m%d-%H%M%S}")
-            recorder = Recorder(path, sup.hub, audio=True)
+            mic = None
+            if self.settings.record_mic:
+                mic = self._mic_factory(sup, serial)
+                mic.start()
+                self.mics[serial] = mic
+            recorder = Recorder(path, sup.hub, audio=True, mic=mic.hub if mic else None)
             recorder.start()
             sup.locked_reason = LOCK_REASON
             self.active[serial] = recorder
@@ -126,10 +134,19 @@ class RecordingService:
         self._write_session()
         return {"session": self.session["name"], "started": started}
 
-    def _imu_factory(self, path: Path, sup, serial: str) -> ImuRecorder:
+    @staticmethod
+    def _adb_fn(sup):
         def adb_fn():
             target = sup.target_fn()
             return sup.adb.for_serial(target) if target else None
+        return adb_fn
+
+    def _mic_factory(self, sup, serial: str) -> MicCapture:
+        source = self.settings.mic_source if self.settings.mic_source in MIC_SOURCES else "mic"
+        return MicCapture(self._adb_fn(sup), source=source, serial=serial)
+
+    def _imu_factory(self, path: Path, sup, serial: str) -> ImuRecorder:
+        adb_fn = self._adb_fn(sup)
         rate = max(1, min(800, int(self.settings.imu_rate_hz or 100)))
         return ImuRecorder(path, adb_fn, rate_hz=rate, serial=serial)
 
@@ -151,6 +168,8 @@ class RecordingService:
             if recorder is None:
                 continue
             stats = await recorder.stop()
+            mic = self.mics.pop(serial, None)
+            mic_stats = await mic.stop() if mic else None
             imu = self.imu.pop(serial, None)
             imu_stats = await imu.stop() if imu else None
             sup = self.streaming.supervisor(serial)
@@ -160,6 +179,9 @@ class RecordingService:
             entry.update(stopped_at=time.time(), parts=stats.parts, bytes=stats.bytes,
                          duration_s=round(stats.duration_us / 1e6, 1), video_packets=stats.video_packets,
                          audio_packets=stats.audio_packets, error=stats.error, reason=reason)
+            entry.update(mic_track=stats.mic_track, mic_packets=stats.mic_packets)
+            if mic_stats is not None:
+                entry.update(mic_restarts=mic_stats.restarts, mic_error=mic_stats.ended_with_error)
             if imu_stats is not None:
                 entry.update(imu_rows=imu_stats.rows, imu_samples=imu_stats.samples,
                              imu_restarts=imu_stats.restarts, imu_error=imu_stats.error)
@@ -187,6 +209,9 @@ class RecordingService:
                            "parts": len(recorder.stats.parts), "bytes": size,
                            "elapsed_s": round(time.time() - (recorder.stats.started_at or time.time()), 1),
                            "video_packets": recorder.stats.video_packets, "error": recorder.stats.error,
+                           "mic_packets": recorder.stats.mic_packets if serial in self.mics else None,
+                           "mic_error": self.mics[serial].stats.error if serial in self.mics else None,
+                           "mic_connected": self.mics[serial].stats.connected if serial in self.mics else None,
                            "imu_rows": self.imu[serial].stats.rows if serial in self.imu else None,
                            "imu_error": self.imu[serial].stats.error if serial in self.imu else None})
         return {"session": self.session["name"] if self.session else None, "active": active,

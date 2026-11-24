@@ -410,6 +410,7 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
 <pre><code>recordings/&lt;セッション名&gt;/
   &lt;名前&gt;_&lt;シリアル末尾6桁&gt;_&lt;YYYYmmdd-HHMMSS&gt;.mkv
   &lt;名前&gt;_&lt;シリアル末尾6桁&gt;_&lt;YYYYmmdd-HHMMSS&gt;_part02.mkv   ← 分割されたとき
+  &lt;名前&gt;_&lt;シリアル末尾6桁&gt;_&lt;YYYYmmdd-HHMMSS&gt;.imu.csv       ← ヘッドセットの IMU（9.4）
   session.json                                                ← 端末・IP・SSID・時刻の記録</code></pre>
 <ul>
   <li>保存先は設定「録画の保存先」で変更できます（既定はリポジトリの <code>recordings/</code>）。</li>
@@ -425,6 +426,26 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
   <li>空き容量が「録画を止める空き容量（GB）」（既定 5GB）を下回ると、自動で録画を止めて通知します。</li>
 </ul>
 <div class="warn"><p>50台を「標準」で録画すると、最大で毎時およそ 95GB になります（212.5 Mbps × 3600 秒 ÷ 8）。実際は画面の動きに応じて少なくなりますが、空き容量に余裕を持たせてください。</p></div>
+
+<h3 id="imu">9.4 ヘッドセットの IMU（加速度・角速度）</h3>
+<p>録画中は、映像と一緒にヘッドセットの IMU（慣性センサー）の値を記録し、映像ファイルと同じ名前の <code>.imu.csv</code> に保存します。設定の <span class="ui">録画と一緒にヘッドセットの IMU（加速度・角速度）を記録</span> で止められます（既定はオン）。記録レートは <span class="ui">IMU の記録レート（Hz）</span> で変えられます（既定 100Hz、最大 800Hz）。</p>
+<div class="table-wrap"><table>
+  <tr><th>列</th><th>内容</th></tr>
+  <tr><td><code>host_time</code></td><td>この PC の時刻（Unix 時刻・秒）。<code>session.json</code> の <code>started_at</code> と同じ時計なので、映像との対応付けに使えます。</td></tr>
+  <tr><td><code>t_us</code></td><td>ヘッドセットの IMU の時計（マイクロ秒）。サンプル間隔の計算はこちらが正確です。</td></tr>
+  <tr><td><code>n</code></td><td>その行に平均したサンプル数（ヘッドセットは毎秒約 800 サンプルを出すため、100Hz では約 8）。</td></tr>
+  <tr><td><code>temp_c</code></td><td>IMU の温度（℃）</td></tr>
+  <tr><td><code>ax</code> <code>ay</code> <code>az</code></td><td>加速度（m/s²、重力を含む）</td></tr>
+  <tr><td><code>gx</code> <code>gy</code> <code>gz</code></td><td>角速度（rad/s）</td></tr>
+</table></div>
+<ul>
+  <li><code>#</code> で始まる行はコメントです（端末・レート・再接続の記録）。pandas では <code>pd.read_csv(path, comment="#")</code> で読めます。</li>
+  <li>軸はヘッドセット内の IMU チップの軸で、ヘッドセットの前後・左右・上下とは少し傾いています。静止していれば加速度の大きさは約 9.8 m/s²（重力）です。</li>
+  <li><code>host_time</code> は、ヘッドセットから届いた同期情報で推定しています。Wi-Fi の遅延分（通常は数ミリ秒〜数十ミリ秒）ずれることがあります。</li>
+  <li>記録中に接続が切れると、再接続した後に続けて書きます（<code># restart</code> の行が入り、その間の値は欠けます）。「録画中」の表の <span class="ui">IMU</span> 列に記録済みの行数が出ます。</li>
+  <li>記録されるのはヘッドセット本体の IMU だけです。頭の位置・向き（トラッキング結果）やコントローラーの値は含みません。</li>
+  <li>通信量は 1 台あたり約 10KB/秒（100Hz）で、映像に比べてごくわずかです。</li>
+</ul>
 
 <!-- 10 -->
 <h2 id="input">10. 入力操作</h2>

@@ -48,6 +48,9 @@ jobs:
         run: /bin/bash ./install.sh --doctor
       - name: Offline tests with the project environment (PoC media pipeline)
         run: ./.mamba-env/bin/python -m unittest discover -s tests -v
+      - name: IMU helper DEX matches its source (pinned OpenJDK + d8)
+        if: matrix.os == 'macos-latest'
+        run: /bin/bash ./scripts/build_imu_helper.sh --check
       - name: Uninstall
         run: /bin/bash ./install.sh --uninstall --yes && test ! -e .mamba-env && test ! -e .tools
 

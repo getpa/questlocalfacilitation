@@ -105,6 +105,7 @@ class ApiTests(unittest.TestCase):
         world = FakeAdbWorld([FakeHeadset("S1", "10.0.0.5", ssid="lab")])
         self.app = Application(data_dir=self.tmp.name, adb=world.adb(), track_source=TrackFeed().source,
                                auto_reconnect=False, start_background=False)
+        self.addCleanup(self.app.registry.close)   # before the temp dir is removed (Windows locks open files)
         self.app.registry.observe("S1", "usb", ip="10.0.0.5")
         self.admin = TestClient(create_admin_app(self.app), base_url="http://127.0.0.1:8765")
         self.viewer = TestClient(create_viewer_app(self.app, secure=False), base_url="http://127.0.0.1:8443")

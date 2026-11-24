@@ -190,7 +190,7 @@ svg .sub { fill: var(--muted); font-size: 12px; }
 <h2 id="requirements">2. 動作環境</h2>
 <div class="table-wrap"><table>
   <tr><th>項目</th><th>要件</th></tr>
-  <tr><td>PC</td><td><strong>Mac</strong>：macOS 13（Ventura）以降。Apple Silicon・Intel のどちらでも動作します。<br><strong>Windows</strong>：Windows 10（1809 以降）または Windows 11 の 64 ビット版。<br>50台を扱う場合は、PC を有線 LAN でつなぐことを推奨します。</td></tr>
+  <tr><td>PC</td><td><strong>Mac</strong>：macOS 13（Ventura）以降。Apple Silicon・Intel のどちらでも動作します。<br><strong>Windows</strong>：Windows 10（1809 以降）または Windows 11 の 64 ビット版。<strong>スマート アプリ コントロールをオフにする必要があります</strong>（3.1）。<br>50台を扱う場合は、PC を有線 LAN でつなぐことを推奨します。</td></tr>
   <tr><td>ブラウザ（管理画面）</td><td>Google Chrome を推奨します。Windows で Chrome がない場合は Microsoft Edge で開きます。どちらもない場合は既定のブラウザで開きます（WebCodecs 対応が必要です）。</td></tr>
   <tr><td>Quest</td><td>Meta Quest 3。開発者モードを有効にし、初回だけ USB ケーブルで PC に接続します。Windows では追加のドライバーは通常不要です（接続が認識されない場合は 15章）。</td></tr>
   <tr><td>ネットワーク</td><td>Quest と Mac が同じ LAN にあり、互いに通信できること（端末どうしの通信を遮断するゲスト隔離が無効であること）。Wi-Fi 6 / 6E・5GHz 以上を推奨します。</td></tr>
@@ -226,6 +226,7 @@ svg .sub { fill: var(--muted); font-size: 12px; }
 </table></div>
 
 <h3>3.1 Windows でのインストール</h3>
+<div class="warn"><p><strong>スマート アプリ コントロールをオフにしてください</strong>：Windows 11 の「スマート アプリ コントロール」が<strong>オン</strong>のままだと、Quest Hub は動きません。インストーラーが入れるツールや Python のライブラリがブロックされるためです。「評価」の状態ではブロックされませんが、Windows が後で自動的にオンへ切り替えることがあるため、評価のままにせずオフにしてください。インストールの前に、Windows セキュリティ ＞ アプリとブラウザーの制御 ＞ スマート アプリ コントロールの設定 を開き、<strong>オフ</strong>にしてください。Windows 10 にはこの機能がないため、操作は不要です。</p></div>
 <p>フォルダ（例：<code>C:\questhub</code>）に展開またはクローンし、<code>install.cmd</code> をダブルクリックします。コマンドプロンプトや PowerShell から実行することもできます。管理者権限は不要で、PATH やレジストリも変更しません。</p>
 <pre><code>install.cmd              :: 初回インストール。更新後の再実行も可
 install.cmd -Doctor      :: 環境チェックだけを行う</code></pre>
@@ -616,6 +617,7 @@ Quest-02	192.168.10.22:5555	1	0</code></pre>
   <tr><td>接続が <code>No route to host</code> で失敗する（macOS 15 以降）</td><td>ターミナルの「ローカルネットワーク」許可を確認します（<a href="#install">3章</a>）。ゲスト隔離のある Wi-Fi も原因になります。</td></tr>
   <tr><td>Windows で USB 接続の端末が表示されない</td><td>ヘッドセット内で「USB デバッグを許可」の確認が出ていないか見ます。ケーブル（データ通信対応）とポートを替えて試します。それでも認識されない場合は、Meta の「Oculus ADB Drivers」をインストールします。</td></tr>
   <tr><td>Windows でビューワーや Wi-Fi 接続がつながらない</td><td>Windows ファイアウォールで <code>python.exe</code> と <code>adb.exe</code> がプライベート ネットワークで許可されているか確認します。ネットワークのプロファイルが「パブリック」になっている場合は「プライベート」に変えます。</td></tr>
+  <tr><td>Windows でインストールや起動ができない（ファイルがブロックされた、DLL を読み込めない、など）</td><td>スマート アプリ コントロールがオンになっていないか確認します（評価から自動でオンに切り替わっている場合もあります）。Windows セキュリティ ＞ アプリとブラウザーの制御 ＞ スマート アプリ コントロールの設定 で<strong>オフ</strong>にしてから、<code>install.cmd</code> を再実行します。</td></tr>
   <tr><td>Windows でインストールに失敗する</td><td>フォルダのパスを短く（例：<code>C:\questhub</code>）して再実行します。社内プロキシ経由の場合は、Windows のプロキシ設定を確認します。<code>install.cmd -Doctor</code> の結果も確認します。</td></tr>
   <tr><td>スキャンで見つからない</td><td>Wi-Fi 化が済んでいるか、Mac と同じサブネットか確認します。範囲を指定して再スキャンします。</td></tr>
   <tr><td>映像が真っ黒</td><td><a href="#black">13章</a>を参照します。通知の推定原因を確認し、検出されない場合は <span class="ui">黒画面の診断</span> を押します。</td></tr>

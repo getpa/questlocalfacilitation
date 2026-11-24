@@ -308,7 +308,8 @@ $('#focus-canvas').onpointerup = (e) => { if (pointerDown) { pointerDown = false
 
 function renderDevices() {
   const usb = state.usb;
-  $('#usb-list').innerHTML = usb.length ? usb.map((u) => `<label class="row"><input type="checkbox" class="usb-pick" value="${esc(u.usb_id)}" ${u.state === 'device' ? '' : 'disabled'}>
+  const picked = new Set($$('.usb-pick:checked').map((x) => x.value));   // keep selections across refreshes
+  $('#usb-list').innerHTML = usb.length ? usb.map((u) => `<label class="row"><input type="checkbox" class="usb-pick" value="${esc(u.usb_id)}" ${u.state === 'device' ? '' : 'disabled'} ${picked.has(u.usb_id) ? 'checked' : ''}>
     <span>${esc(u.model || '')} ${esc(u.serial)}</span> ${u.state === 'device' ? (u.wifi ? '<span class="chip ok">Wi-Fi 済み</span>' : '<span class="chip">USB</span>')
     : '<span class="chip warn">ヘッドセット内で USB デバッグを許可してください</span>'}</label>`).join('') : '<span class="muted">USB 接続の端末はありません</span>';
 
@@ -377,7 +378,6 @@ async function setWifiNetwork(ids) {
   if (ids && !ids.length) { toast('端末を選んでください', 'warn'); return; }
   const body = { ssid, security, passphrase: security === 'open' ? '' : passphrase, enable_adb: $('#wifi-then-adb').checked };
   if (ids) body.usb_ids = ids;
-  $('#wifi-pass').value = '';            // do not keep the passphrase in the page
   const r = await act(() => api('POST', '/api/usb/wifi-network', body));
   if (!r) return;
   const failed = r.filter((x) => !x.ok);

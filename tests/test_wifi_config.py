@@ -34,6 +34,14 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(shlex.split(wifi_config.connect_script(WifiTarget("cafe", "open"))),
                          ["cmd", "wifi", "connect-network", "cafe", "open"])
 
+    def test_saved_creators(self):
+        dump = ('ID: 4 SSID: "lab" PROVIDER-NAME: null\n cuid=10067 cname=com.oculus.panelapp.settings luid=10067\n'
+                '* ID: 5 SSID: "current" PROVIDER-NAME: null\n cuid=10059 cname=com.oculus.q4b.mdm luid=10059\n'
+                'ID: 6 SSID: "mine" PROVIDER-NAME: null\n cuid=2000 cname=com.android.shell luid=2000\n')
+        self.assertEqual(wifi_config.parse_saved_creators(dump), {
+            "lab": (10067, "com.oculus.panelapp.settings"), "current": (10059, "com.oculus.q4b.mdm"),
+            "mine": (2000, "com.android.shell")})
+
     def test_command_failure_detection(self):
         self.assertIsNone(wifi_config.command_failed(""))
         self.assertIsNone(wifi_config.command_failed("Connection initiated with netId 12\n"))
@@ -58,7 +66,15 @@ class ServiceTests(unittest.TestCase):
             ok = await service.configure_wifi(["SER1"], WifiTarget("new-net", "wpa2", SECRET), enable_adb=True)
             headset.networks["other-net"] = ("wpa2", "rightpass1")
             wrong = await service.configure_wifi(["SER1"], WifiTarget("other-net", "wpa2", "wrongpass1"))
+            headset.shell_output["Configured networks"] = (
+                'ID: 3 SSID: "mdm-net" PROVIDER-NAME: null\n cuid=10059 cname=com.oculus.q4b.mdm luid=10059\n')
+            headset.networks["mdm-net"] = ("wpa2", "rightpass1")
+            foreign = await service.configure_wifi(["SER1"], WifiTarget("mdm-net", "wpa2", "rightpass1"))
+            self.assertFalse(any("mdm-net" in s for s in headset.stdin_scripts), "nothing sent for a foreign config")
             await mgr.stop()
+            self.assertFalse(foreign[0]["ok"])
+            self.assertIn("com.oculus.q4b.mdm", foreign[0]["error"])
+            self.assertEqual(reg.get("SER1")["ssid_baseline"], "new-net", "baseline restored after refusal")
             return ok, wrong, reg, bus, world, headset
         from unittest import mock
         with mock.patch.object(wifi_config, "CONNECT_TIMEOUT", 0.3), mock.patch.object(wifi_config, "POLL_INTERVAL", 0.05):

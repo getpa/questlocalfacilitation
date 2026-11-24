@@ -12,6 +12,7 @@ AdbError messages, in logs or in events.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 import time
 
@@ -64,6 +65,41 @@ def connect_script(target: WifiTarget) -> str:
     return " ".join(parts) + "\n"
 
 
+SHELL_UID = 2000
+SAVED_CONFIGS_CMD = ("dumpsys wifi | sed -n '/Configured networks Begin/,/Configured networks End/p'"
+                     " | grep -E '(^|[^A-Za-z])ID: [0-9]+ SSID: |cuid='")
+_SAVED_ID = re.compile(r'^(?:\* )?ID: \d+ SSID: "((?:[^"\\]|\\.)*)"')
+_CREATOR = re.compile(r"\bcuid=(\d+) cname=(\S+)")
+
+
+def parse_saved_creators(text: str) -> dict[str, tuple[int, str]]:
+    """SSID -> (creator uid, creator package) of the networks saved on the headset."""
+    creators: dict[str, tuple[int, str]] = {}
+    ssid = None
+    for line in text.splitlines():
+        m = _SAVED_ID.match(line.strip())
+        if m:
+            ssid = m.group(1)
+            continue
+        c = _CREATOR.search(line)
+        if c and ssid is not None:
+            creators.setdefault(ssid, (int(c.group(1)), c.group(2)))
+            ssid = None
+    return creators
+
+
+async def foreign_owner(adb: Adb, ssid: str) -> str | None:
+    """Package that saved `ssid` if it is not the adb shell (shell may not update it)."""
+    try:
+        creators = parse_saved_creators(await adb.shell(SAVED_CONFIGS_CMD, timeout=20, check=False))
+    except AdbError:
+        return None
+    owner = creators.get(ssid)
+    if owner and owner[0] != SHELL_UID:
+        return owner[1]
+    return None
+
+
 def command_failed(output: str) -> str | None:
     text = output.strip()
     low = text.lower()
@@ -78,6 +114,13 @@ async def connect_network(adb: Adb, target: WifiTarget, timeout: float | None = 
     target.validate()
     timeout = CONNECT_TIMEOUT if timeout is None else timeout
     poll = POLL_INTERVAL if poll is None else poll
+    owner = await foreign_owner(adb, target.ssid)
+    if owner:
+        # Verified on Quest 3: WifiConfigManager rejects uid 2000 updating a network
+        # another app saved ("does not have permission to update configuration").
+        raise WifiConfigError(
+            f"{target.ssid} はヘッドセットに保存済みです（保存元: {owner}）。Quest は adb からこの設定の変更・接続を"
+            "許可しません。ヘッドセットの設定で接続するか、保存元（MDM など）で配布してください")
     out = await adb.run("shell", "sh", input=connect_script(target).encode("utf-8"), timeout=20, check=False)
     problem = command_failed(out)
     if problem:

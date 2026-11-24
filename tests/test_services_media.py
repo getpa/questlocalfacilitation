@@ -85,6 +85,30 @@ class FakeFactory:
             await fake.__aexit__(None, None, None)
 
 
+class FakeMicServer:
+    """Stands in for the microphone scrcpy session: Opus packets on the headset clock, in real time."""
+
+    def __init__(self, audio):
+        self.audio = audio
+        self.audio_codec = "opus"
+        self.audio_disabled_reason = None
+
+    async def start(self):
+        return self
+
+    async def run(self, on_video, on_audio):
+        from questhub.stream.protocol import MediaPacket
+        head, packets = self.audio
+        on_audio(MediaPacket(head, None, config=True))
+        for pts, data in packets:
+            on_audio(MediaPacket(data, pts))
+            await asyncio.sleep(0.02)
+        await asyncio.Event().wait()
+
+    async def stop(self):
+        pass
+
+
 class StreamingAutoStartTests(unittest.TestCase):
     def test_auto_start_on_connect_and_suspended_after_end_of_class(self):
         from questhub.config import Settings
@@ -248,6 +272,10 @@ class RecordingServiceTests(unittest.TestCase):
                 return FakeProcess(HELPER_OUTPUT.splitlines())
             rec._imu_factory = lambda path, sup, serial: ImuRecorder(path, lambda: "adb", serial=serial,
                                                                      spawn=fake_helper)
+            from questhub.stream.mic import MicCapture
+            mic_audio = self.audio
+            rec._mic_factory = lambda sup, serial: MicCapture(lambda: "adb", serial=serial,
+                                                              server_factory=lambda adb: FakeMicServer(mic_audio))
             result = await rec.start(None, "lesson 01")
             locked = {s: sup.locked_reason for s, sup in streaming.supervisors.items()}
             with self.assertRaises(RuntimeError):
@@ -272,8 +300,12 @@ class RecordingServiceTests(unittest.TestCase):
         for serial, entry in stopped.items():
             self.assertIsNone(entry["error"])
             self.assertGreater(entry["video_packets"], 10)
+            self.assertTrue(entry["mic_track"])
+            self.assertGreater(entry["mic_packets"], 10)
             with av.open(entry["parts"][0]) as c:
-                self.assertEqual(sorted(s.type for s in c.streams), ["audio", "video"])
+                self.assertEqual(sorted(s.type for s in c.streams), ["audio", "audio", "video"])
+                titles = [s.metadata.get("title") for s in c.streams if s.type == "audio"]
+                self.assertEqual(titles, ["Headset audio", "Microphone"], "the microphone is its own track")
         self.assertIn("Seat_01_A_", Path(stopped["S1"]["parts"][0]).name)
         data = json.loads((Path(sessions[0]["dir"]) / "session.json").read_text(encoding="utf-8"))
         self.assertEqual(sorted(data["devices"]), ["S1", "S2"])

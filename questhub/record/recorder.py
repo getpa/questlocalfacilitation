@@ -2,7 +2,8 @@
 
 The file starts at the first key frame after start(). Video and audio share
 the device's monotonic clock, so both are offset by that key frame's PTS.
-Matroska stays playable if the process dies mid-recording.
+An optional microphone hub (a second scrcpy session, same clock) becomes a
+third track. Matroska stays playable if the process dies mid-recording.
 """
 from __future__ import annotations
 
@@ -27,6 +28,11 @@ log = logging.getLogger(__name__)
 MICROSECONDS = Fraction(1, 1_000_000)
 OPUS_SAMPLE_RATE = 48_000
 AUDIO_WAIT_S = 1.0  # how long the first key frame may wait for the audio config
+MIC_WAIT_S = 6.0    # ... and for the microphone session, which starts with the recording
+
+# Microphone events are tagged so they never mix with the headset audio of the display session.
+MIC_CONFIG = "mic_config"
+MIC = "mic"
 
 
 _TIMEOUT = hubmod.Event("timeout")
@@ -37,6 +43,8 @@ class RecordingStats:
     path: str
     video_packets: int = 0
     audio_packets: int = 0
+    mic_packets: int = 0
+    mic_track: bool = False
     bytes: int = 0
     started_at: float | None = None
     stopped_at: float | None = None
@@ -46,15 +54,18 @@ class RecordingStats:
 
 
 class Recorder:
-    def __init__(self, path: str | Path, hub: FrameHub, audio: bool = True):
+    def __init__(self, path: str | Path, hub: FrameHub, audio: bool = True, mic: FrameHub | None = None):
         self.path = Path(path)
         self.hub = hub
         self.audio = audio and hub.audio_codec is not None
+        self.mic = mic
         self.stats = RecordingStats(path=str(self.path))
         self._queue: queue.Queue = queue.Queue(maxsize=2048)
         self._thread: threading.Thread | None = None
         self._task: asyncio.Task | None = None
         self._sub = None
+        self._mic_sub = None
+        self._mic_task: asyncio.Task | None = None
 
     @property
     def running(self) -> bool:
@@ -65,9 +76,13 @@ class Recorder:
             raise RuntimeError("already started")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._sub = self.hub.subscribe(video=True, audio=self.audio, maxsize=4096)
+        if self.mic is not None:
+            self._mic_sub = self.mic.subscribe(video=False, audio=True, maxsize=4096)
         self._thread = threading.Thread(target=self._mux_loop, name=f"recorder:{self.path.name}", daemon=True)
         self._thread.start()
         self._task = asyncio.create_task(self._forward())
+        if self._mic_sub is not None:
+            self._mic_task = asyncio.create_task(self._forward_mic())
         self.stats.started_at = time.time()
 
     async def _forward(self) -> None:
@@ -77,7 +92,21 @@ class Recorder:
         finally:
             await asyncio.to_thread(self._queue.put, None)
 
+    async def _forward_mic(self) -> None:
+        async for event in self._mic_sub:
+            if event.kind == hubmod.AUDIO_CONFIG:
+                event = hubmod.Event(MIC_CONFIG, packet=event.packet)
+            elif event.kind == hubmod.AUDIO:
+                event = hubmod.Event(MIC, packet=event.packet)
+            else:
+                continue
+            await asyncio.to_thread(self._queue.put, event)
+
     async def stop(self) -> RecordingStats:
+        if self._mic_sub:
+            self._mic_sub.close()
+        if self._mic_task:
+            await asyncio.gather(self._mic_task, return_exceptions=True)
         if self._sub:
             self._sub.close()
         if self._task:
@@ -98,17 +127,18 @@ class Recorder:
         part = 0
         written_bytes = 0
         container = template = None
-        vstream = astream = None
-        session = video_config = audio_config = None
+        vstream = astream = mstream = None
+        session = video_config = audio_config = mic_config = None
+        record_mic = self.mic is not None
         base = None
         pending: list = []  # events from the first key frame while waiting for the audio config
-        last_pts = {"v": -1, "a": -1}
+        last_pts = {"v": -1, "a": -1, "m": -1}
         record_audio = self.audio and self.hub.audio_codec == "opus"
         if self.audio and not record_audio:
             log.warning("audio %s not recorded (only Opus is supported)", self.hub.audio_codec)
 
         def open_container():
-            nonlocal container, template, vstream, astream, part
+            nonlocal container, template, vstream, astream, mstream, part
             part += 1
             path = self.part_path(part)
             self.stats.parts.append(str(path))
@@ -125,6 +155,16 @@ class Recorder:
                 astream.codec_context.extradata = audio_config  # the device's OpusHead
             elif record_audio:
                 log.warning("no audio config within %.1fs; recording video only", AUDIO_WAIT_S)
+            if astream is not None:
+                astream.metadata["title"] = "Headset audio"
+            if record_mic and mic_config:
+                mstream = container.add_stream_from_template(_opus_template())
+                mstream.time_base = MICROSECONDS
+                mstream.codec_context.extradata = mic_config
+                mstream.metadata["title"] = "Microphone"
+                self.stats.mic_track = True
+            elif record_mic:
+                log.warning("no microphone within %.1fs; recording without it", MIC_WAIT_S)
 
         def write(event) -> None:
             packet = event.packet
@@ -134,25 +174,29 @@ class Recorder:
             elif event.kind == hubmod.AUDIO and astream is not None and packet.pts is not None and packet.pts >= base:
                 self._mux(container, astream, packet, base, last_pts, "a")
                 self.stats.audio_packets += 1
+            elif event.kind == MIC and mstream is not None and packet.pts is not None and packet.pts >= base:
+                self._mux(container, mstream, packet, base, last_pts, "m")
+                self.stats.mic_packets += 1
 
         def close_container():
-            nonlocal container, template, vstream, astream, base, written_bytes
+            nonlocal container, template, vstream, astream, mstream, base, written_bytes
             if container is not None:
                 container.close()
                 written_bytes += self.part_path(part).stat().st_size
                 self.stats.duration_us += max(last_pts["v"], 0)
             if template is not None:
                 template.close()
-            container = template = vstream = astream = None
+            container = template = vstream = astream = mstream = None
             base = None
-            last_pts["v"] = last_pts["a"] = -1
+            last_pts["v"] = last_pts["a"] = last_pts["m"] = -1
 
         try:
             pending_since = None
             while True:
                 timeout = None
                 if pending_since is not None:
-                    timeout = max(0.0, pending_since + AUDIO_WAIT_S - time.monotonic())
+                    wait = MIC_WAIT_S if record_mic and mic_config is None else AUDIO_WAIT_S
+                    timeout = max(0.0, pending_since + wait - time.monotonic())
                 try:
                     event = self._queue.get(timeout=timeout)
                 except queue.Empty:
@@ -172,6 +216,10 @@ class Recorder:
                     video_config = event.packet.data
                 elif kind == hubmod.AUDIO_CONFIG:
                     audio_config = event.packet.data
+                elif kind == MIC_CONFIG:
+                    mic_config = mic_config or event.packet.data   # a reconnect repeats the same OpusHead
+                elif kind == MIC and container is None and not pending:
+                    pass   # before the file starts
                 elif container is not None:
                     write(event)
                     continue
@@ -184,6 +232,8 @@ class Recorder:
                 if container is None and pending:
                     waited = time.monotonic() - pending_since
                     if record_audio and audio_config is None and waited < AUDIO_WAIT_S:
+                        continue
+                    if record_mic and mic_config is None and waited < MIC_WAIT_S:
                         continue
                     pending_since = None
                     base = pending[0].packet.pts

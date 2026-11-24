@@ -380,6 +380,12 @@ $('#tsv-file').onchange = async (e) => {
 
 // ---------------------------------------------------------------- recording tab
 
+function micCell(r) {
+  if (r.mic_packets === null || r.mic_packets === undefined) return '<span class="muted">—</span>';
+  if (r.mic_packets > 0) return '録音中';
+  return r.mic_error ? `<span class="chip warn" title="${esc(r.mic_error)}">取得できません</span>` : '<span class="muted">開始中</span>';
+}
+
 function imuCell(r) {
   if (r.imu_rows === null || r.imu_rows === undefined) return '<span class="muted">—</span>';
   if (r.imu_rows > 0) return `${r.imu_rows.toLocaleString()} 行`;
@@ -394,9 +400,9 @@ function renderRecording() {
   $('#rec-disk').textContent = `保存先 ${rec.dir || ''} · 空き ${rec.free_gb ?? '?'} GB${rec.session ? ` · セッション ${rec.session}` : ''}`;
   $('#rec-active tbody').innerHTML = rec.active.map((r) => {
     const d = state.devices.find((x) => x.serial === r.serial) || {};
-    return `<tr><td>${esc(d.alias || r.serial)}</td><td>${fmtTime(r.elapsed_s)}</td><td>${fmtBytes(r.bytes)}</td><td>${r.parts}</td><td>${imuCell(r)}</td>
+    return `<tr><td>${esc(d.alias || r.serial)}</td><td>${fmtTime(r.elapsed_s)}</td><td>${fmtBytes(r.bytes)}</td><td>${r.parts}</td><td>${micCell(r)}</td><td>${imuCell(r)}</td>
       <td class="muted">${esc(r.file.split('/').slice(-2).join('/'))}</td><td><button data-stop="${esc(r.serial)}">停止</button></td></tr>`;
-  }).join('') || '<tr><td colspan="7" class="empty">録画していません</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="empty">録画していません</td></tr>';
 }
 $('#rec-active').onclick = (e) => { const s = e.target.dataset.stop; if (s) act(() => api('POST', '/api/recordings/stop', { serials: [s] })); };
 $('#rec-start-all').onclick = () => act(() => api('POST', '/api/recordings/start', { name: $('#rec-name').value.trim() || null }), '録画を開始しました');

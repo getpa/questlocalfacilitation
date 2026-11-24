@@ -95,7 +95,7 @@
       </div>
     </div>
     <h3>録画中</h3>
-    <div class="table-wrap"><table id="rec-active"><thead><tr><th>端末</th><th>経過</th><th>サイズ</th><th>分割</th><th>IMU</th><th>ファイル</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap"><table id="rec-active"><thead><tr><th>端末</th><th>経過</th><th>サイズ</th><th>分割</th><th>マイク</th><th>IMU</th><th>ファイル</th><th></th></tr></thead><tbody></tbody></table></div>
     <h3>過去のセッション</h3>
     <div class="table-wrap"><table id="rec-sessions"><thead><tr><th>セッション</th><th>開始</th><th>端末数</th><th>サイズ</th><th>保存先</th></tr></thead><tbody></tbody></table></div>
   </section>
@@ -150,6 +150,14 @@
           <label><input type="checkbox" name="black_prox_nudge"> 復旧時に「装着中」扱いにする（prox_close）</label>
           <label>録画の保存先 <input name="record_dir" size="40"></label>
           <label>録画を止める空き容量（GB） <input name="disk_min_free_gb" type="number" min="1" step="1"></label>
+          <label><input type="checkbox" name="record_mic"> 録画にヘッドセットのマイク音声を別トラックとして加える</label>
+          <label>マイクの種類 <select name="mic_source">
+            <option value="mic">標準（mic）</option>
+            <option value="mic-voice-communication">通話向け・エコー除去（mic-voice-communication）</option>
+            <option value="mic-voice-recognition">音声認識向け（mic-voice-recognition）</option>
+            <option value="mic-camcorder">動画撮影向け（mic-camcorder）</option>
+            <option value="mic-unprocessed">無加工（mic-unprocessed）</option>
+          </select></label>
           <label><input type="checkbox" name="record_imu"> 録画と一緒にヘッドセットの IMU（加速度・角速度）を記録</label>
           <label>IMU の記録レート（Hz） <input name="imu_rate_hz" type="number" min="1" max="800" step="1"></label>
           <label>ビューワーのポート <input name="viewer_port" type="number"></label>

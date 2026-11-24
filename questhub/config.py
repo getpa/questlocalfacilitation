@@ -24,6 +24,8 @@ class Settings:
     disk_min_free_gb: float = 5.0
     record_imu: bool = True                # also record the headset IMU (CSV next to the video)
     imu_rate_hz: int = 100                 # IMU rows per second (the headset delivers ~800 samples/s)
+    record_mic: bool = True                # add the headset microphone as a separate track of the recording
+    mic_source: str = "mic"                # scrcpy audio source: mic, mic-unprocessed, mic-voice-communication, ...
     telemetry_interval: float = 60.0
     adb_concurrency: int = 8
     reconnect_max_backoff: float = 30.0

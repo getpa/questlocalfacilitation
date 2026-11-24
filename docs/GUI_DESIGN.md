@@ -14,6 +14,7 @@
   - v0.12: Wi-Fi の接続先を adb で一括設定する機能を調査・試作。運用に耐えないため削除し、調査結果だけを残す（§4.9.1）
   - v0.13: Wi-Fi 設定のダイアログ表示中も Meta が録画を止めることを確認（§4.10）
   - v0.14: Windows 対応（GUI のみ。インストーラー `install.ps1`、起動 `questhub.cmd`、§9.8）
+  - v0.15: Windows 11 ではスマート アプリ コントロールをオフにする必要があることを追記（§9.8）
 - 対象: 既存CLI（`legacy/quest_multi_scrcpy.sh` ほか）の機能をGUIで完結させる新コンポーネント
 - 前提: macOS ホスト / Meta Quest 3 **最大50台** / 同一LAN / scrcpy 5.0.1
 
@@ -724,6 +725,8 @@ questhub.command               # 起動用ラッパー（.mamba-env/bin/python -
 - LAN スキャンの自分のサブネット: `ipconfig` は表示言語で項目名が変わるため、PowerShell の `Get-NetIPAddress | ConvertTo-Json` を使う。
 - 録画ファイル名: 末尾のピリオドを除く（Windows では使えない）。
 - `.gitattributes`: `.cmd`/`.ps1` は CRLF、シェルスクリプトは LF に固定（Windows で clone しても bash スクリプトが壊れない）。
+
+**前提: スマート アプリ コントロールをオフにする**: Windows 11 のスマート アプリ コントロールが有効（オン／評価）だと、インストーラーが入れるツールや Python のライブラリがブロックされ、Quest Hub は動かない。Windows セキュリティ ＞ アプリとブラウザーの制御 ＞ スマート アプリ コントロールの設定 で「オフ」にすることを利用者に求める（README・マニュアル 3.1・トラブルシューティングに記載）。
 
 **検証**: CI に `windows-latest` のジョブを追加した（Windows PowerShell 5.1 で実インストール → 再実行が何もしないこと → doctor → テスト → GUI を起動して管理画面が応答し、2 つ目の起動が拒否され、1 つ目が生き残ること → アンインストール）。bash を使うテストは Windows では飛ばす。実機の Quest を Windows につないだ確認はまだしていない。
 

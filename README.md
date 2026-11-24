@@ -25,7 +25,11 @@ Nothing else is required: no Mambaforge/conda, Homebrew, or Xcode Command Line T
 
 ## Windows
 
-Windows 10 (1809+) or 11, 64-bit. Nothing else is required: no administrator rights, Python, conda or Git. Unzip or clone to a short path such as `C:\questhub`, then double-click `install.cmd` (it runs `install.ps1` with Windows PowerShell 5.1):
+Windows 10 (1809+) or 11, 64-bit.
+
+> **Turn off Smart App Control first (Windows 11).** Quest Hub does not run while Smart App Control is on or in evaluation mode: it blocks the tools and Python libraries the installer puts in the folder. Open Windows Security > App & browser control > Smart App Control settings and choose **Off** before installing. Windows 10 does not have this feature.
+
+Nothing else is required: no administrator rights, Python, conda or Git. Unzip or clone to a short path such as `C:\questhub`, then double-click `install.cmd` (it runs `install.ps1` with Windows PowerShell 5.1):
 
 ```bat
 install.cmd                      :: install or update (idempotent)

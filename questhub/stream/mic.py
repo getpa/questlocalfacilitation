@@ -63,7 +63,11 @@ class MicCapture:
         backoff = 1.0
         first = True
         while True:
-            adb = self.adb_fn()
+            try:
+                adb = self.adb_fn()
+            except Exception as exc:   # the device left the registry, etc.: keep trying until stop()
+                self.stats.error = str(exc) or type(exc).__name__
+                adb = None
             if adb is None:
                 await asyncio.sleep(backoff)
                 continue
